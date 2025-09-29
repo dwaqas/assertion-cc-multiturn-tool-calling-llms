@@ -1,2 +1,4 @@
 # MacOS exclusion
 .DS_Store
+# Python cache
+__pycache__/
