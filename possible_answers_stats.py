@@ -30,7 +30,7 @@ def build_func_to_class(doc_dir: Path) -> Dict[str, str]:
 def extract_classes(entry: Dict, func_to_class: Dict[str, str]) -> Tuple[str, Set[str]]:
     _id = entry.get("id", "")  # Prompt identifier;
     turns = entry.get("ground_truth")
-    first_turn = turns[0] if isinstance(turns, list) and turns else []  # First sequence;
+    first_turn = turns[0] if isinstance(turns, list) and turns else [] # First sequence;
     classes: Set[str] = set()
     for call in first_turn or []:
         func = call.split("(", 1)[0].strip() # Extract function name;
