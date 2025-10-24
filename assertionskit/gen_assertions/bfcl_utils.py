@@ -12,3 +12,11 @@ def first_user_text(item: Dict[str, Any]) -> str:
     if isinstance(turn0, list):
         return "\n".join([str(m.get("content","")) for m in turn0 if isinstance(m, dict)])
     return str(turn0)
+
+def last_user_text(item: Dict[str, Any]) -> str:
+    q = item.get("question", [])
+    if not q: return ""
+    turn = q[-1]
+    if isinstance(turn, list):
+        return "\n".join(str(m.get("content", "")) for m in turn if isinstance(m, dict))
+    return str(turn)

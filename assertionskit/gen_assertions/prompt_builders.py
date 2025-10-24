@@ -3,12 +3,13 @@ from typing import Dict, List
 
 def build_user_prompt(original_first_prompt: str,
                       gold_entries: List[Dict[str, str]],
-                      candidates: List[Dict[str, str]]) -> str:
+                      candidates: List[Dict[str, str]],
+                      section_title: str = "USER GOAL (first turn)") -> str:
     """Construct the user portion of the prompt for the assertion generator."""
     lines: List[str] = []
     first_turn = (original_first_prompt or "").strip() or "[empty first user prompt]"
 
-    lines.append("USER GOAL (first turn)")
+    lines.append(section_title)
     lines.append("---")
     lines.append(first_turn)
     lines.append("---\n")

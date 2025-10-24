@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
 from assertionskit.gen_assertions.io_utils import load_json_or_jsonl
-from assertionskit.gen_assertions.bfcl_utils import prompt_number, first_user_text
+from assertionskit.gen_assertions.bfcl_utils import prompt_number, first_user_text, last_user_text
 from assertionskit.gen_assertions.text_injection import inject_assertion
 from assertionskit.gen_assertions.prompt_builders import build_user_prompt
 from assertionskit.gen_assertions.gemini_client import get_model, call_gemini_json
@@ -110,6 +110,8 @@ def main() -> None:
     ap.add_argument("--out-csv", default="assertions.review.csv")
     ap.add_argument("--language", choices=("hedged", "confident"), default="confident",
                     help="Controls whether assertions sound hedged or confident.")
+    ap.add_argument("--assertion-pos", choices=("init", "end"), default="init",
+                    help="Controls which user turn receives the injected assertion.")
     ap.add_argument("--include-gold", action="store_true",
                     help="Include the true first-turn function alongside incorrect ones.")
     args = ap.parse_args()
@@ -134,12 +136,22 @@ def main() -> None:
         items_by_pn[pn_int] = item
 
     inject_cycle = ["middle", "end"]
+    prompt_section_title = (
+        "USER GOAL (first turn)"
+        if args.assertion_pos == "init"
+        else "USER GOAL (last turn)"
+    )
+    modified_key = (
+        "modified_first_prompt"
+        if args.assertion_pos == "init"
+        else "modified_last_prompt"
+    )
 
     out_min = open(args.out_min, "w", encoding="utf-8")
     out_meta = open(args.out_meta, "w", encoding="utf-8")
     csv_f = open(args.out_csv, "w", encoding="utf-8", newline="")
     csv_w = csv.writer(csv_f, lineterminator="\n")
-    csv_w.writerow(["id", "assertion", "modified_first_prompt", "justification"])
+    csv_w.writerow(["id", "assertion", modified_key, "justification"])
 
     processed = 0
     prompt_log = open("gen_assert_prompts.temp.log", "w", encoding="utf-8")
@@ -164,7 +176,11 @@ def main() -> None:
             }, ensure_ascii=False) + "\n")
             continue
 
-        original_first = first_user_text(item)
+        target_prompt = (
+            first_user_text(item)
+            if args.assertion_pos == "init"
+            else last_user_text(item)
+        )
         gold_first_turn = pa_entry.get("first_turn", [])
         gold_all = set(pa_entry.get("all_funcs", []))
         if not gold_first_turn:
@@ -228,7 +244,7 @@ def main() -> None:
 
         inject_pos = inject_cycle[processed % len(inject_cycle)]
         gold_section = gold_entries if args.include_gold else []
-        base_prompt = build_user_prompt(original_first, gold_section, candidates)
+        base_prompt = build_user_prompt(target_prompt, gold_section, candidates, prompt_section_title)
 
         prompt_log.write(
             "==== PROMPT START ====\n"
@@ -305,13 +321,13 @@ def main() -> None:
         selected_idx = int(choice.get("selected_index", 1))
         fn_name = candidates[selected_idx - 1]["func"]
 
-        modified_first = inject_assertion(original_first, assertion_text, inject_pos)
+        modified_prompt = inject_assertion(target_prompt, assertion_text, inject_pos)
         justification = (choice.get("justification") or "").strip()
 
         out_min.write(json.dumps({
             "id": _id,
             "assertion": assertion_text,
-            "modified_first_prompt": modified_first,
+            modified_key: modified_prompt,
         }, ensure_ascii=False) + "\n")
 
         out_meta.write(json.dumps({
@@ -323,12 +339,11 @@ def main() -> None:
             "justification": justification,
             "assertion": assertion_text,
             "injection_position": inject_pos,
-            "modified_first_prompt": modified_first,
+            modified_key: modified_prompt,
             "raw_llm": choice.get("raw", {}),
             "gold_functions": sorted(gold_all),
         }, ensure_ascii=False) + "\n")
-
-        csv_w.writerow([_id, assertion_text, modified_first, justification])
+        csv_w.writerow([_id, assertion_text, modified_prompt, justification])
         processed += 1
 
     prompt_log.close()
