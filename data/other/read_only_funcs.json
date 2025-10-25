@@ -1,0 +1,94 @@
+{
+  "GorillaFileSystem": [
+    "cat",
+    "diff",
+    "du",
+    "find",
+    "grep",
+    "ls",
+    "pwd",
+    "tail",
+    "wc"
+  ],
+  "MathAPI": [
+    "absolute_value",
+    "add",
+    "divide",
+    "imperial_si_conversion",
+    "logarithm",
+    "max_value",
+    "mean",
+    "min_value",
+    "multiply",
+    "percentage",
+    "power",
+    "round_number",
+    "si_unit_conversion",
+    "square_root",
+    "standard_deviation",
+    "subtract",
+    "sum_values"
+  ],
+  "MessageAPI": [
+    "get_message_stats",
+    "get_user_id",
+    "list_users",
+    "message_get_login_status",
+    "search_messages",
+    "view_messages_sent"
+  ],
+  "TwitterAPI": [
+    "get_tweet",
+    "get_tweet_comments",
+    "get_user_stats",
+    "get_user_tweets",
+    "list_all_following",
+    "posting_get_login_status",
+    "search_tweets"
+  ],
+  "TicketAPI": [
+    "get_ticket",
+    "get_user_tickets",
+    "ticket_get_login_status"
+  ],
+  "TradingBot": [
+    "filter_stocks_by_price",
+    "get_account_info",
+    "get_available_stocks",
+    "get_current_time",
+    "get_order_details",
+    "get_order_history",
+    "get_stock_info",
+    "get_symbol_by_name",
+    "get_transaction_history",
+    "get_watchlist",
+    "notify_price_change",
+    "trading_get_login_status"
+  ],
+  "TravelAPI": [
+    "compute_exchange_rate",
+    "contact_customer_support",
+    "get_all_credit_cards",
+    "get_budget_fiscal_year",
+    "get_credit_card_balance",
+    "get_flight_cost",
+    "get_nearest_airport_by_city",
+    "list_all_airports",
+    "retrieve_invoice",
+    "travel_get_login_status",
+    "verify_traveler_information"
+  ],
+  "VehicleControlAPI": [
+    "check_tire_pressure",
+    "displayCarStatus",
+    "display_log",
+    "estimate_distance",
+    "estimate_drive_feasibility_by_mileage",
+    "find_nearest_tire_shop",
+    "get_current_speed",
+    "get_outside_temperature_from_google",
+    "get_outside_temperature_from_weather_com",
+    "get_zipcode_based_on_city",
+    "liter_to_gallon"
+  ]
+}

@@ -4,4 +4,4 @@
 __pycache__/
 # Temporary files
 temp/
-*.temp.log
+*.temp.*

@@ -22,12 +22,12 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
-from assertionskit.gen_assertions.io_utils import load_json_or_jsonl
-from assertionskit.gen_assertions.bfcl_utils import prompt_number, first_user_text, last_user_text
-from assertionskit.gen_assertions.text_injection import inject_assertion
-from assertionskit.gen_assertions.prompt_builders import build_user_prompt
-from assertionskit.gen_assertions.gemini_client import get_model, call_gemini_json
-from assertionskit.gen_assertions.data_utils import (
+from dependencies.gen_assertions.io_utils import load_json_or_jsonl
+from dependencies.gen_assertions.bfcl_utils import prompt_number, first_user_text, last_user_text
+from dependencies.gen_assertions.text_injection import inject_assertion
+from dependencies.gen_assertions.prompt_builders import build_user_prompt
+from dependencies.gen_assertions.gemini_client import get_model, call_gemini_json
+from dependencies.gen_assertions.data_utils import (
     load_function_catalog,
     load_possible_answer_index,
     resolve_class_to_stem,

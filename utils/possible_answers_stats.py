@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 from typing import Dict, Iterable, List, Set, Tuple
 
-from assertionskit.gen_assertions.io_utils import load_json_or_jsonl
+from dependencies.gen_assertions.io_utils import load_json_or_jsonl
 
 def load_json(path: Path) -> Iterable[Dict]:
     # Read possible answers;
