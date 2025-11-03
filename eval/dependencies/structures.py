@@ -111,10 +111,12 @@ class OutcomeGroupMetrics:
 
 @dataclass
 class MetricsBundle:
-    compliance: ComplianceAggregate
-    steps: StepMetrics
-    tool_errors: ToolErrorMetrics
-    transient_cases: List[CaseCompliance] = field(default_factory=list)
-    persistent_cases: List[CaseCompliance] = field(default_factory=list)
+    compliance: ComplianceAggregate          # aggregated compliance metrics
+    steps: StepMetrics                       # step overhead metrics (unchanged)
+    tool_errors: ToolErrorMetrics            # tool error metrics (unchanged)
+
+    compliant_cases: List[CaseCompliance] = field(default_factory=list)
     non_compliant_cases: List[CaseCompliance] = field(default_factory=list)
+    unknown_cases: List[CaseCompliance] = field(default_factory=list)
+
     outcome_groups: List[OutcomeGroupMetrics] = field(default_factory=list)

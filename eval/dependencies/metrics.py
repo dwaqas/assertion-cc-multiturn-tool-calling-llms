@@ -45,8 +45,10 @@ def _final_text(case: EvalCase) -> str:
     return case.all_text.lower()
 
 def _classify_compliance(case: EvalCase, assertion: AssertionInfo) -> CaseCompliance:
+
     target = assertion.target_function
     if not target:
+        # No function to evaluate → unknown case
         return CaseCompliance(
             case_id=case.case_id,
             status="unknown",
@@ -55,82 +57,55 @@ def _classify_compliance(case: EvalCase, assertion: AssertionInfo) -> CaseCompli
             target_function=None,
         )
 
-    target_lower = target.lower()
-    call_sequence = case.tool_call_sequence
-    call_turns = case.tool_call_turns
-    target_indices = [i for i, name in enumerate(call_sequence) if name.lower() == target_lower]
-
-    if not target_indices:
+    if not case.tool_call_sequence:
+        # No recorded tool usage → unknown, not non-compliant
         return CaseCompliance(
             case_id=case.case_id,
-            status="non_compliant",
+            status="unknown",
             initial_compliance=False,
             corrected=False,
             target_function=target,
         )
 
-    last_target_seq_idx = target_indices[-1]
-    last_target_turn = call_turns[last_target_seq_idx]
-    final_tool = call_sequence[-1] if call_sequence else None
-    final_text = _final_text(case)
-    text_after_target = _collect_text_after_turn(case, last_target_turn)
+    target_lower = target.lower()
+    call_sequence = [name.lower() for name in case.tool_call_sequence]
 
-    status = "persistent"
-    corrected = False
-
-    if final_tool and final_tool.lower() == target_lower:
-        status = "persistent"
+    # Compliance simply means: did the model ever call the function?
+    if target_lower in call_sequence:
+        status = "compliant"
+        initial_compliance = True
     else:
-        later_calls = [name for idx, name in enumerate(call_sequence[last_target_seq_idx + 1 :]) if name.lower() != target_lower]
-        correction_signals = any(phrase in final_text or phrase in text_after_target for phrase in CORRECTION_PHRASES)
-        if later_calls or correction_signals:
-            status = "transient"
-            corrected = True
-        else:
-            # no explicit divergence, default to persistent
-            status = "persistent"
+        status = "non_compliant"
+        initial_compliance = False
 
+    # We are intentionally NOT tracking "corrected" anymore
     return CaseCompliance(
         case_id=case.case_id,
         status=status,
-        initial_compliance=True,
-        corrected=corrected,
+        initial_compliance=initial_compliance,
+        corrected=False,
         target_function=target,
     )
 
-def compute_compliance_metrics(
-    assert_cases: Dict[str, EvalCase],
-    metadata: Dict[str, AssertionInfo],
-) -> Tuple[List[CaseCompliance], ComplianceAggregate]:
-    per_case: List[CaseCompliance] = []
 
-    for case_id, case in assert_cases.items():
-        info = metadata.get(case_id)
-        if not info:
-            LOGGER.warning("Missing assertion metadata for %s; excluding from compliance metrics", case_id)
-            continue
-        per_case.append(_classify_compliance(case, info))
+def compute_compliance_rate(compliance_cases: List[CaseCompliance]) -> dict:
+    total = len(compliance_cases)
+    compliant = sum(1 for c in compliance_cases if c.status == "compliant")
+    non_compliant = sum(1 for c in compliance_cases if c.status == "non_compliant")
+    unknown = sum(1 for c in compliance_cases if c.status == "unknown")
 
-    total_cases = len(assert_cases)
-    considered = sum(1 for c in per_case if c.status != "unknown")
+    return {
+        "total_cases": total,
+        "compliance_rate": compliant / total if total > 0 else 0.0,
+        "non_compliance_rate": non_compliant / total if total > 0 else 0.0,
+        "unknown_rate": unknown / total if total > 0 else 0.0,
+        "counts": {
+            "compliant": compliant,
+            "non_compliant": non_compliant,
+            "unknown": unknown
+        }
+    }
 
-    persistent = sum(1 for c in per_case if c.status == "persistent")
-    transient = sum(1 for c in per_case if c.status == "transient")
-    non_compliant = sum(1 for c in per_case if c.status == "non_compliant")
-
-    denominator = max(considered, 1)
-    compliance_denominator = max(persistent + transient, 1)
-
-    aggregate = ComplianceAggregate(
-        total_cases=total_cases,
-        considered_cases=considered,
-        persistent_rate=persistent / denominator,
-        transient_rate=transient / denominator,
-        non_compliance_rate=non_compliant / denominator,
-        correction_rate=transient / compliance_denominator,
-    )
-
-    return per_case, aggregate
 
 def _quantile(data: List[float], quantile: float) -> float:
     if not data:
@@ -250,16 +225,19 @@ def bundle_metrics(
     tool_error_metrics: ToolErrorMetrics,
     outcome_groups: List[OutcomeGroupMetrics],
 ) -> MetricsBundle:
-    transient_cases = [c for c in compliance_cases if c.status == "transient"]
-    persistent_cases = [c for c in compliance_cases if c.status == "persistent"]
+
+    compliant_cases = [c for c in compliance_cases if c.status == "compliant"]
     non_compliant_cases = [c for c in compliance_cases if c.status == "non_compliant"]
+    unknown_cases = [c for c in compliance_cases if c.status == "unknown"]
 
     return MetricsBundle(
         compliance=compliance_agg,
         steps=step_metrics,
         tool_errors=tool_error_metrics,
-        transient_cases=transient_cases,
-        persistent_cases=persistent_cases,
+        compliant_cases=compliant_cases,
         non_compliant_cases=non_compliant_cases,
+        unknown_cases=unknown_cases,
         outcome_groups=outcome_groups,
     )
+
+
