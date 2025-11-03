@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Dict, Iterable
 
 import google.generativeai as genai
-from assertionskit.gen_assertions.io_utils import load_json_or_jsonl
+from dependencies.gen_assertions.io_utils import load_json_or_jsonl
 
 GENERATION_CONFIG = {
     "temperature": 0.45,
@@ -149,9 +149,10 @@ def main() -> None:
         updated["assertion_target_style"] = target_style
         updated["source_assertion"] = original
         updated["assertion"] = new_assertion
-        mod_prompt = entry.get("modified_first_prompt", "")
-        if mod_prompt:
-            updated["modified_first_prompt"] = mod_prompt.replace(original, new_assertion)
+        for key in ("modified_first_prompt", "modified_last_prompt", "modified_turn_prompt"):
+            mod_prompt = entry.get(key)
+            if isinstance(mod_prompt, str) and mod_prompt:
+                updated[key] = mod_prompt.replace(original, new_assertion)
         rewritten.append(updated)
 
     write_jsonl(output_path, rewritten)
