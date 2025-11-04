@@ -5,3 +5,6 @@ __pycache__/
 # Temporary files
 temp/
 *.temp.*
+# Non-accuracy metrics evaluation artifacts
+eval/output/
+eval/plots/
