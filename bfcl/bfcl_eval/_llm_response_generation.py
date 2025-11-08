@@ -3,6 +3,7 @@ import multiprocessing as mp
 import os
 import shutil
 import traceback
+import logging # !: PATCHED CONTENT;
 from collections import defaultdict, deque
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 import threading
@@ -24,7 +25,8 @@ from tqdm import tqdm
 
 from bfcl_eval.model_handler.base_handler import BaseHandler
 from bfcl_eval.model_handler.local_inference.base_oss_handler import OSSHandler
-
+from bfcl_eval.utils_fsa import configure_fsa # !: PATCHED CONTENT;
+import bfcl_eval.utils_fsa as utils_fsa # !: PATCHED CONTENT;
 
 def get_args():
     parser = argparse.ArgumentParser()
@@ -57,6 +59,14 @@ def get_args():
         default=None,
         help="Specify the path to a local directory containing the model's config/tokenizer/weights for fully offline inference. Use this only if the model weights are stored in a location other than the default HF_HOME directory.",
     )
+    # !: PATCHED CONTENT;
+    parser.add_argument(
+        "--fsa-file",
+        type=str,
+        default=None,
+        help="Path to function-sourced assertion JSONL file (optional).",
+    )
+    # !: END OF PATCHED CONTENT;
     args = parser.parse_args()
 
     return args
@@ -335,6 +345,18 @@ def main(args):
     if type(args.test_category) is not list:
         args.test_category = [args.test_category]
 
+    # !: PATCHED CONTENT;
+    configure_fsa(args.fsa_file)
+    registry = utils_fsa.get_registry()
+    if getattr(registry, "enabled", False):
+        try:
+            case_count = len(registry._entries)  # type: ignore[attr-defined]
+        except AttributeError:
+            case_count = 0
+        logging.warning("[F-SA] Registry active (%d cases)", case_count)
+    else:
+        logging.warning("[F-SA] Registry inactive")
+    # !: END OF PATCHED CONTENT;
     (
         all_test_categories,
         all_test_entries_involved,
@@ -383,3 +405,5 @@ def main(args):
             # Sort the result files by id at the end
             for model_result_json in args.result_dir.rglob(RESULT_FILE_PATTERN):
                 sort_file_content_by_id(model_result_json)
+
+    utils_fsa.emit_summary() # !: PATCHED CONTENT;

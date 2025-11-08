@@ -60,7 +60,7 @@ def build_system_preamble(language: str, include_gold: bool) -> str:
         "",
         "Task:",
         "1) Choose AT LEAST ONE incorrect function/s a non-expert may believe solves the user's goal IMMEDIATELY. You MUST pick at least one.",
-        "2) Give a brief justification (<= 90 words) for your choice, explaining the mistaken reasoning taht could have led a user to believing this incorrect sequence addresses the prompt goal.",
+        "2) Give a brief justification (<= 90 words) for your choice, explaining the mistaken reasoning that could have led a user to believing this incorrect sequence addresses the prompt goal.",
         "3) Write ONE standalone assertion sentence that DIRECTLY claims the suggested function/s are capable of accomplishing the user prompt objective.",
         "",
         "Style for the assertion:",

@@ -1,6 +1,7 @@
 import json
 from copy import deepcopy
 from typing import TYPE_CHECKING, Any
+import logging # !: PATCHED CONTENT;
 
 from bfcl_eval.constants.category_mapping import VERSION_PREFIX
 from bfcl_eval.constants.default_prompts import (
@@ -20,6 +21,7 @@ from bfcl_eval.eval_checker.multi_turn_eval.multi_turn_utils import (
 )
 from bfcl_eval.model_handler.utils import add_memory_instruction_system_prompt
 from bfcl_eval.utils import *
+import bfcl_eval.utils_fsa as utils_fsa # !: PATCHED CONTENT;
 from overrides import final
 
 if TYPE_CHECKING:
@@ -149,6 +151,12 @@ class BaseHandler:
         inference_data = self._compile_tools(inference_data, test_entry)
 
         all_multi_turn_messages: list[list[dict]] = test_entry["question"]
+        # !: PATCHED CONTENT;
+        logger = logging.getLogger(__name__)
+        registry = utils_fsa.get_registry()
+        if getattr(registry, "enabled", False):
+            registry.start_case(test_entry_id)
+        # !: END OF PATCHED CONTENT;
         for turn_idx, current_turn_message in enumerate(all_multi_turn_messages):
             current_turn_message: list[dict]
 
@@ -281,6 +289,16 @@ class BaseHandler:
                     ),
                     is_evaL_run=False,
                 )
+                # !: PATCHED CONTENT;
+                registry = utils_fsa.get_registry()
+                if getattr(registry, "enabled", False):
+                    registry.maybe_inject(
+                        test_entry_id,
+                        turn_idx,
+                        decoded_model_responses,
+                        execution_results,
+                    )
+                # !: END OF PATCHED CONTENT;
 
                 # Add the execution results to the chat history for the next turn
                 inference_data = self._add_execution_results_FC(
@@ -365,6 +383,11 @@ class BaseHandler:
         ):
             metadata["reasoning_content"] = all_reasoning_content
 
+        # !: PATCHED CONTENT;
+        registry = utils_fsa.get_registry()
+        if getattr(registry, "enabled", False):
+            registry.finish_case(test_entry_id)
+        # !: END OF PATCHED CONTENT;
         return all_model_response, metadata
 
     @final
@@ -442,6 +465,11 @@ class BaseHandler:
         inference_data: dict = self._pre_query_processing_prompting(test_entry)
 
         all_multi_turn_messages: list[list[dict]] = test_entry["question"]
+        # !: PATCHED CONTENT;
+        registry = utils_fsa.get_registry()
+        if getattr(registry, "enabled", False):
+            registry.start_case(test_entry_id)
+        # !: END OF PATCHED CONTENT;
         for turn_idx, current_turn_message in enumerate(all_multi_turn_messages):
             current_turn_message: list[dict]
 
@@ -571,6 +599,16 @@ class BaseHandler:
                     ),
                     is_evaL_run=False,
                 )
+                # !: PATCHED CONTENT;
+                registry = utils_fsa.get_registry()
+                if getattr(registry, "enabled", False):
+                    registry.maybe_inject(
+                        test_entry_id,
+                        turn_idx,
+                        decoded_model_responses,
+                        execution_results,
+                    )
+                # !: END OF PATCHED CONTENT;
 
                 # Add the execution results to the chat history for the next turn
                 inference_data = self._add_execution_results_prompting(
@@ -654,6 +692,11 @@ class BaseHandler:
         ):
             metadata["reasoning_content"] = all_reasoning_content
 
+        # !: PATCHED CONTENT;
+        registry = utils_fsa.get_registry()
+        if getattr(registry, "enabled", False):
+            registry.finish_case(test_entry_id)
+        # !: END OF PATCHED CONTENT;
         return all_model_response, metadata
 
     @final
