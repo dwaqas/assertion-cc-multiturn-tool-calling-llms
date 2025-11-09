@@ -9,10 +9,22 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 if __package__ is None or __package__ == "":  # pragma: no cover
     sys.path.append(str(Path(__file__).resolve().parents[1]))
-from eval.dependencies.loader import load_assertion_metadata, load_score_file, parse_eval_file  # type: ignore
-from eval.dependencies.metrics import bundle_metrics, compute_compliance_metrics, compute_step_metrics, compute_tool_error_metrics  # type: ignore
-from eval.dependencies.plots import plot_compliance, plot_error_rates, plot_step_ecdf
-from eval.dependencies.structures import AssertionInfo, CaseOutcome, EvalCase, MetricsBundle, OutcomeGroupMetrics, ScoreCase
+from eval.dependencies.non_accuracy_metrics.loader import load_assertion_metadata, load_score_file, parse_eval_file  # type: ignore
+from eval.dependencies.non_accuracy_metrics.metrics import (  # type: ignore
+    bundle_metrics,
+    compute_compliance_metrics,
+    compute_step_metrics,
+    compute_tool_error_metrics,
+)
+from eval.dependencies.non_accuracy_metrics.plots import plot_compliance, plot_error_rates, plot_step_ecdf
+from eval.dependencies.non_accuracy_metrics.structures import (
+    AssertionInfo,
+    CaseOutcome,
+    EvalCase,
+    MetricsBundle,
+    OutcomeGroupMetrics,
+    ScoreCase,
+)
 LOGGER = logging.getLogger(__name__)
 OUTCOME_DEFINITIONS = {(True, True): ("success_to_success", "Resilient (success→success)"), (True, False): ("success_to_failure", "Regressed (success→failure)"), (False, True): ("failure_to_success", "Improved (failure→success)"), (False, False): ("failure_to_failure", "Persistent failure (failure→failure)")}
 OUTCOME_ORDER = ["success_to_success", "success_to_failure", "failure_to_success", "failure_to_failure"]
