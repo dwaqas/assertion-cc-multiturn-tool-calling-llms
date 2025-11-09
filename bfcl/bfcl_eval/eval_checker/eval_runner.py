@@ -818,7 +818,7 @@ def runner(
     generate_leaderboard_csv(leaderboard_table, score_dir)
 
 
-def main(model, test_categories, result_dir, score_dir, partial_eval: bool = False):
+def main(model, test_categories, result_dir, score_dir, partial_eval: bool = True):
     if result_dir is None:
         result_dir = RESULT_PATH
     else:
