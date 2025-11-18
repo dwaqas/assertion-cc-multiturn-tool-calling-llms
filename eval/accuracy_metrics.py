@@ -192,17 +192,28 @@ def _write_csv(
 ) -> None:
     models = sorted({model for category in table.values() for model in category})
     output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    baseline = table.get("noassert", {})
+
+    def _format_cell(model: str, category: str) -> str:
+        entry = table.get(category, {}).get(model)
+        if entry is None:
+            return ""
+        accuracy_pct = entry.accuracy * 100
+        value = f"{accuracy_pct:.2f}%"
+        if category != "noassert" and model in baseline:
+            base_accuracy_pct = baseline[model].accuracy * 100
+            delta = accuracy_pct - base_accuracy_pct
+            value += f" ({delta:+.2f}%)"
+        return value
+
     with output_path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.writer(handle)
         writer.writerow(["model", *category_order])
         for model in models:
             row = [model]
             for category in category_order:
-                entry = table.get(category, {}).get(model)
-                if entry is None:
-                    row.append("")
-                else:
-                    row.append(f"{entry.accuracy * 100:.2f}")
+                row.append(_format_cell(model, category))
             writer.writerow(row)
     LOGGER.info("Wrote accuracy summary to %s", output_path)
 

@@ -6,7 +6,7 @@ import re
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Iterable, List, Sequence
+from typing import Dict, Iterable, List, Optional
 
 from .structures import AssertionInfo, EvalCase, TurnSummary, ScoreCase
 
@@ -16,7 +16,7 @@ FUNC_CALL_PATTERN = re.compile(r'([A-Za-z_][\w\.]*)\s*\(')
 ERROR_TYPE_PATTERN = re.compile(r'"error_type"\s*:\s*"([^"]+)"')
 
 def load_json_or_jsonl(path: Path) -> List[dict]:
-    # Load data from JSON or JSONL sources; 
+    # Load data from JSON or JSONL sources;
     text = path.read_text(encoding="utf-8").strip()
     if not text:
         return []
@@ -51,24 +51,28 @@ def _ensure_list_of_lists(obj: Iterable) -> List[List[str]]:
             turns.append([str(item)])
     return turns
 
-def _select_turns(turns: List[List[str]], focal: str) -> List[List[str]]:
-    if not turns:
-        return turns
+def _selected_turn_indices(total_turns: int, focal: str) -> List[int]:
+    if total_turns <= 0:
+        return []
     if focal == "first":
-        return [turns[0]]
+        return [0]
     if focal == "last":
-        return [turns[-1]]
-    return turns
+        return [total_turns - 1]
+    return list(range(total_turns))
 
-def parse_eval_file(path: Path, focal_turn: str = "none") -> Dict[str, EvalCase]:
+def parse_eval_file(path: Path, focal_turn: str = "none", excluded_ids: Optional[set[str]] = None) -> Dict[str, EvalCase]:
     # Parse evaluation traces into canonical case structures; 
     records = load_json_or_jsonl(path)
     cases: Dict[str, EvalCase] = {}
+    excluded_ids = excluded_ids or set()
 
     for rec in records:
         case_id = str(rec.get("id") or rec.get("prompt_id") or rec.get("case_id") or "")
         if not case_id:
             LOGGER.warning("Skipping record without id in %s", path)
+            continue
+        if case_id in excluded_ids:
+            # Exclude baseline-controlled cases so metrics align with 197-count denominator;
             continue
 
         raw_turns = rec.get("result") or rec.get("model_result") or rec.get("turns" )
@@ -77,7 +81,7 @@ def parse_eval_file(path: Path, focal_turn: str = "none") -> Dict[str, EvalCase]
             continue
 
         full_turns = _ensure_list_of_lists(raw_turns)
-        turns = _select_turns(full_turns, focal_turn)
+        selected_indices = _selected_turn_indices(len(full_turns), focal_turn)
         turn_summaries: List[TurnSummary] = []
         tool_call_sequence: List[str] = []
         tool_call_turns: List[int] = []
@@ -86,7 +90,9 @@ def parse_eval_file(path: Path, focal_turn: str = "none") -> Dict[str, EvalCase]
         total_errors = 0
         text_fragments: List[str] = []
 
-        for idx, messages in enumerate(turns):
+        for idx, messages in enumerate(full_turns):
+            if idx not in selected_indices:
+                continue
             tool_calls: List[str] = []
             text_messages: List[str] = []
             error_types: List[str] = []
@@ -183,10 +189,43 @@ def load_assertion_metadata(path: Path) -> Dict[str, AssertionInfo]:
             continue
         target = rec.get("selected_function_name") or rec.get("selected_function")
         assertion_text = str(rec.get("assertion") or "")
+
+        turn_idx_value = rec.get("turn_idx")
+        turn_idx: Optional[int] = None
+        if turn_idx_value is not None:
+            try:
+                turn_idx = int(turn_idx_value)
+            except (TypeError, ValueError):
+                LOGGER.debug("Unable to parse turn_idx for %s: %r", case_id, turn_idx_value)
+
+        injection_position = rec.get("injection_position")
+        if injection_position is None and rec.get("injection_pos"):
+            injection_position = rec.get("injection_pos")
+
+        if turn_idx is None and isinstance(injection_position, str):
+            pos_norm = injection_position.lower()
+            if pos_norm in {"first", "initial", "init"}:
+                turn_idx = 0
+
+        if turn_idx is None:
+            if "modified_first_prompt" in rec:
+                turn_idx = 0
+            elif "modified_last_prompt" in rec:
+                turn_idx = -1
+
+        followup_name = rec.get("followup_function_name")
+        followup_info = rec.get("followup_function")
+        if not followup_name and isinstance(followup_info, dict):
+            followup_name = followup_info.get("name")
+
         metadata[case_id] = AssertionInfo(
             case_id=case_id,
             target_function=target,
             assertion_text=assertion_text,
+            turn_idx=turn_idx,
+            injection_position=injection_position,
+            followup_function_name=followup_name,
+            followup_function=followup_info if isinstance(followup_info, dict) else None,
         )
 
     return metadata

@@ -1,7 +1,7 @@
 from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import List, Optional
 
 # Typed containers shared across evaluation stages; 
 
@@ -30,60 +30,26 @@ class AssertionInfo:
     case_id: str
     target_function: Optional[str]
     assertion_text: str
+    turn_idx: Optional[int] = None
+    injection_position: Optional[str] = None
+    followup_function_name: Optional[str] = None
+    followup_function: Optional[dict] = None
 
 @dataclass
 class CaseCompliance:
     case_id: str
     status: str
     initial_compliance: bool
-    corrected: bool
     target_function: Optional[str]
+    evaluated_turn: Optional[int] = None
 
+# Aggregated compliance ratios for quick reporting;
 @dataclass
 class ComplianceAggregate:
     total_cases: int
     considered_cases: int
-    persistent_rate: float
-    transient_rate: float
+    compliance_rate: float
     non_compliance_rate: float
-    correction_rate: float
-
-@dataclass
-class CaseStepDelta:
-    case_id: str
-    assert_steps: int
-    no_assert_steps: int
-    delta: int
-
-@dataclass
-class StepMetrics:
-    mean_delta: float
-    median_delta: float
-    p90_delta: float
-    per_case: List[CaseStepDelta]
-
-@dataclass
-class CaseToolUsage:
-    case_id: str
-    assert_tool_calls: int
-    assert_errors: int
-    no_assert_tool_calls: int
-    no_assert_errors: int
-
-@dataclass
-class ErrorTypeShift:
-    error_type: str
-    assert_count: int
-    no_assert_count: int
-    delta: int
-
-@dataclass
-class ToolErrorMetrics:
-    assert_error_rate: float
-    no_assert_error_rate: float
-    delta_error_rate: float
-    per_case: List[CaseToolUsage]
-    top_error_types: List[ErrorTypeShift]
 
 @dataclass
 class ScoreCase:
@@ -106,14 +72,11 @@ class OutcomeGroupMetrics:
     label: str
     count: int
     compliance: ComplianceAggregate
-    steps: StepMetrics
-    tool_errors: ToolErrorMetrics
 
+# Bundled aggregates plus optional per-case views; 
 @dataclass
 class MetricsBundle:
-    compliance: ComplianceAggregate          # aggregated compliance metrics
-    steps: StepMetrics                       # step overhead metrics (unchanged)
-    tool_errors: ToolErrorMetrics            # tool error metrics (unchanged)
+    compliance: ComplianceAggregate
 
     compliant_cases: List[CaseCompliance] = field(default_factory=list)
     non_compliant_cases: List[CaseCompliance] = field(default_factory=list)

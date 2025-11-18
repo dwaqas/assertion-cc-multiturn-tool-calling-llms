@@ -1,7 +1,7 @@
 import os
 import json
 import re
-from typing import Any, Dict
+from typing import Any, Dict, Iterable, Set
 
 import google.generativeai as genai
 
@@ -58,12 +58,15 @@ def _normalise_choice(data: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "selected_index": data.get("selected_index"),
         "selected_function_name": (data.get("selected_function_name") or "").strip(),
+        "followup_function": (data.get("followup_function") or "").strip(),
         "justification": (data.get("justification") or "").strip(),
         "system_policy_note": (data.get("system_policy_note") or "").strip(),
         "raw": data,
     }
 
-def _valid_choice(choice: Dict[str, Any], num_candidates: int) -> bool:
+def _valid_choice(choice: Dict[str, Any],
+                 num_candidates: int,
+                 followup_names: Set[str]) -> bool:
     try:
         idx = int(choice.get("selected_index")) # Validate index;
     except Exception:
@@ -71,6 +74,9 @@ def _valid_choice(choice: Dict[str, Any], num_candidates: int) -> bool:
     if not (1 <= idx <= num_candidates):
         return False
     if not choice.get("selected_function_name"):
+        return False
+    followup = (choice.get("followup_function") or "").strip()
+    if followup_names and followup not in followup_names:
         return False
     if not choice.get("system_policy_note"):
         return False
@@ -85,6 +91,7 @@ def _enforce_choice(choice: Dict[str, Any], num_candidates: int) -> Dict[str, An
         idx = 1 # Clamp out-of-range;
     choice["selected_index"] = idx
     choice["selected_function_name"] = (choice.get("selected_function_name") or "").strip()
+    choice["followup_function"] = (choice.get("followup_function") or "").strip()
     choice["system_policy_note"] = (choice.get("system_policy_note") or "").strip()
     choice["justification"] = (choice.get("justification") or "").strip()
     return choice
@@ -93,7 +100,14 @@ def call_gemini_json(model,
                      system_preamble: str,
                      user_prompt: str,
                      num_candidates: int,
+                     valid_followups: Iterable[str],
                      retries: int = 1) -> Dict[str, Any]:
+    followup_names = {
+        (name or "").strip()
+        for name in valid_followups
+        if isinstance(name, str) and (name or "").strip()
+    }
+
     def _invoke(reminder: str = "") -> Dict[str, Any]: # Single Gemini call;
         content = [
             {"role": "user", "parts": [{"text": system_preamble}]},
@@ -106,10 +120,10 @@ def call_gemini_json(model,
         return _normalise_choice(_parse_json_blob(text)) # Canonicalise fields;
 
     choice = _invoke()
-    if not _valid_choice(choice, num_candidates) and retries > 0: # Retry with reminder;
+    if not _valid_choice(choice, num_candidates, followup_names) and retries > 0: # Retry with reminder;
         reminder = (
-            "REMINDER: Pick exactly one candidate function. Output JSON only with "
-            "{selected_index, selected_function_name, justification, system_policy_note}. "
+            "REMINDER: Pick exactly one candidate function and one follow-up function. Output JSON only with "
+            "{selected_index, selected_function_name, followup_function, justification, system_policy_note}. "
             "Hint must be one sentence (<=30 words)."
         )
         choice = _invoke(reminder)

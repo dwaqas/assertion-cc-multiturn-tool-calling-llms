@@ -78,7 +78,7 @@ def load_function_catalog(doc_dir: Path,
         raw_entries: List[Tuple[str, str]] = []
         for record in records:
             name = record.get("name")
-            if not name or name in read_only:
+            if not name:
                 continue
             description = (record.get("description") or "").strip()
             raw_entries.append((name, description))
@@ -93,10 +93,18 @@ def load_function_catalog(doc_dir: Path,
                 sentences = _split_sentences(description)
                 if len(sentences) > shared:
                     trimmed = " ".join(sentences[shared:]).strip()
-            doc_entry = {"name": name, "description": trimmed or description}
+            doc_entry = {
+                "name": name,
+                "description": trimmed or description,
+                "read_only": name in read_only,
+            }
             functions.append(doc_entry)
             if name not in by_function:
-                by_function[name] = {"description": doc_entry["description"], "stem": path.stem}
+                by_function[name] = {
+                    "description": doc_entry["description"],
+                    "stem": path.stem,
+                    "read_only": name in read_only,
+                }
         if functions:
             by_stem[path.stem] = functions
     return by_stem, by_function # Provide both lookup tables;

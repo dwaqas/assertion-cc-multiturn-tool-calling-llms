@@ -1,0 +1,325 @@
+<svg xmlns='http://www.w3.org/2000/svg' width='920' height='450' viewBox='0 0 920 450'>
+  <style>text { font-family: monospace; font-size: 12px; }</style>
+  <text x='460.0' y='20' text-anchor='middle' font-size='16'>Run-to-run σ of accuracy Δ (pp)</text>
+  <text x='200.0' y='30' text-anchor='middle' transform='rotate(-45 200.0 30)'>assert_f-sa-baseline</text>
+  <text x='280.0' y='30' text-anchor='middle' transform='rotate(-45 280.0 30)'>assert_f-sa-interaction-confident</text>
+  <text x='360.0' y='30' text-anchor='middle' transform='rotate(-45 360.0 30)'>assert_f-sa-interaction-hedged</text>
+  <text x='440.0' y='30' text-anchor='middle' transform='rotate(-45 440.0 30)'>assert_init-confident</text>
+  <text x='520.0' y='30' text-anchor='middle' transform='rotate(-45 520.0 30)'>assert_init-hedged</text>
+  <text x='600.0' y='30' text-anchor='middle' transform='rotate(-45 600.0 30)'>assert_readHeavy-confident</text>
+  <text x='680.0' y='30' text-anchor='middle' transform='rotate(-45 680.0 30)'>assert_readHeavy-hedged</text>
+  <text x='760.0' y='30' text-anchor='middle' transform='rotate(-45 760.0 30)'>assert_writeHeavy-confident</text>
+  <text x='840.0' y='30' text-anchor='middle' transform='rotate(-45 840.0 30)'>assert_writeHeavy-hedged</text>
+  <text x='150' y='59.0' text-anchor='end'>BitAgent_BitAgent-Bounty-8B</text>
+  <rect x='160' y='40' width='80' height='30' fill='rgb(42,107,174)' stroke='white' stroke-width='1' />
+  <text x='200.0' y='59.0' text-anchor='middle'>0.29</text>
+  <rect x='240' y='40' width='80' height='30' fill='rgb(51,113,176)' stroke='white' stroke-width='1' />
+  <text x='280.0' y='59.0' text-anchor='middle'>0.59</text>
+  <rect x='320' y='40' width='80' height='30' fill='rgb(64,121,179)' stroke='white' stroke-width='1' />
+  <text x='360.0' y='59.0' text-anchor='middle'>1.02</text>
+  <rect x='400' y='40' width='80' height='30' fill='rgb(79,131,182)' stroke='white' stroke-width='1' />
+  <text x='440.0' y='59.0' text-anchor='middle'>1.52</text>
+  <rect x='480' y='40' width='80' height='30' fill='rgb(33,102,172)' stroke='white' stroke-width='1' />
+  <text x='520.0' y='59.0' text-anchor='middle'>0.00</text>
+  <rect x='560' y='40' width='80' height='30' fill='rgb(72,127,180)' stroke='white' stroke-width='1' />
+  <text x='600.0' y='59.0' text-anchor='middle'>1.28</text>
+  <rect x='640' y='40' width='80' height='30' fill='rgb(56,117,177)' stroke='white' stroke-width='1' />
+  <text x='680.0' y='59.0' text-anchor='middle'>0.78</text>
+  <rect x='720' y='40' width='80' height='30' fill='rgb(56,117,177)' stroke='white' stroke-width='1' />
+  <text x='760.0' y='59.0' text-anchor='middle'>0.78</text>
+  <rect x='800' y='40' width='80' height='30' fill='rgb(60,119,178)' stroke='white' stroke-width='1' />
+  <text x='840.0' y='59.0' text-anchor='middle'>0.88</text>
+  <text x='150' y='89.0' text-anchor='end'>Qwen_Qwen3-14B-FC</text>
+  <rect x='160' y='70' width='80' height='30' fill='rgb(96,142,186)' stroke='white' stroke-width='1' />
+  <text x='200.0' y='89.0' text-anchor='middle'>2.05</text>
+  <rect x='240' y='70' width='80' height='30' fill='rgb(105,148,188)' stroke='white' stroke-width='1' />
+  <text x='280.0' y='89.0' text-anchor='middle'>2.34</text>
+  <rect x='320' y='70' width='80' height='30' fill='rgb(80,132,182)' stroke='white' stroke-width='1' />
+  <text x='360.0' y='89.0' text-anchor='middle'>1.55</text>
+  <rect x='400' y='70' width='80' height='30' fill='rgb(65,122,179)' stroke='white' stroke-width='1' />
+  <text x='440.0' y='89.0' text-anchor='middle'>1.06</text>
+  <rect x='480' y='70' width='80' height='30' fill='rgb(168,187,202)' stroke='white' stroke-width='1' />
+  <text x='520.0' y='89.0' text-anchor='middle'>4.38</text>
+  <rect x='560' y='70' width='80' height='30' fill='rgb(113,153,190)' stroke='white' stroke-width='1' />
+  <text x='600.0' y='89.0' text-anchor='middle'>2.60</text>
+  <rect x='640' y='70' width='80' height='30' fill='rgb(127,162,193)' stroke='white' stroke-width='1' />
+  <text x='680.0' y='89.0' text-anchor='middle'>3.06</text>
+  <rect x='720' y='70' width='80' height='30' fill='rgb(104,147,188)' stroke='white' stroke-width='1' />
+  <text x='760.0' y='89.0' text-anchor='middle'>2.33</text>
+  <rect x='800' y='70' width='80' height='30' fill='rgb(128,162,193)' stroke='white' stroke-width='1' />
+  <text x='840.0' y='89.0' text-anchor='middle'>3.09</text>
+  <text x='150' y='119.0' text-anchor='end'>Qwen_Qwen3-32B-FC</text>
+  <rect x='160' y='100' width='80' height='30' fill='rgb(214,217,213)' stroke='white' stroke-width='1' />
+  <text x='200.0' y='119.0' text-anchor='middle'>5.88</text>
+  <rect x='240' y='100' width='80' height='30' fill='rgb(103,146,188)' stroke='white' stroke-width='1' />
+  <text x='280.0' y='119.0' text-anchor='middle'>2.29</text>
+  <rect x='320' y='100' width='80' height='30' fill='rgb(155,179,199)' stroke='white' stroke-width='1' />
+  <text x='360.0' y='119.0' text-anchor='middle'>3.96</text>
+  <rect x='400' y='100' width='80' height='30' fill='rgb(133,166,194)' stroke='white' stroke-width='1' />
+  <text x='440.0' y='119.0' text-anchor='middle'>3.26</text>
+  <rect x='480' y='100' width='80' height='30' fill='rgb(127,162,193)' stroke='white' stroke-width='1' />
+  <text x='520.0' y='119.0' text-anchor='middle'>3.06</text>
+  <rect x='560' y='100' width='80' height='30' fill='rgb(184,198,206)' stroke='white' stroke-width='1' />
+  <text x='600.0' y='119.0' text-anchor='middle'>4.90</text>
+  <rect x='640' y='100' width='80' height='30' fill='rgb(139,169,196)' stroke='white' stroke-width='1' />
+  <text x='680.0' y='119.0' text-anchor='middle'>3.46</text>
+  <rect x='720' y='100' width='80' height='30' fill='rgb(157,181,200)' stroke='white' stroke-width='1' />
+  <text x='760.0' y='119.0' text-anchor='middle'>4.03</text>
+  <rect x='800' y='100' width='80' height='30' fill='rgb(92,139,185)' stroke='white' stroke-width='1' />
+  <text x='840.0' y='119.0' text-anchor='middle'>1.92</text>
+  <text x='150' y='149.0' text-anchor='end'>Qwen_Qwen3-8B-FC</text>
+  <rect x='160' y='130' width='80' height='30' fill='rgb(69,125,180)' stroke='white' stroke-width='1' />
+  <text x='200.0' y='149.0' text-anchor='middle'>1.17</text>
+  <rect x='240' y='130' width='80' height='30' fill='rgb(124,160,192)' stroke='white' stroke-width='1' />
+  <text x='280.0' y='149.0' text-anchor='middle'>2.97</text>
+  <rect x='320' y='130' width='80' height='30' fill='rgb(137,168,195)' stroke='white' stroke-width='1' />
+  <text x='360.0' y='149.0' text-anchor='middle'>3.38</text>
+  <rect x='400' y='130' width='80' height='30' fill='rgb(173,191,204)' stroke='white' stroke-width='1' />
+  <text x='440.0' y='149.0' text-anchor='middle'>4.57</text>
+  <rect x='480' y='130' width='80' height='30' fill='rgb(253,242,222)' stroke='white' stroke-width='1' />
+  <text x='520.0' y='149.0' text-anchor='middle'>7.13</text>
+  <rect x='560' y='130' width='80' height='30' fill='rgb(144,172,197)' stroke='white' stroke-width='1' />
+  <text x='600.0' y='149.0' text-anchor='middle'>3.60</text>
+  <rect x='640' y='130' width='80' height='30' fill='rgb(224,223,215)' stroke='white' stroke-width='1' />
+  <text x='680.0' y='149.0' text-anchor='middle'>6.20</text>
+  <rect x='720' y='130' width='80' height='30' fill='rgb(119,156,191)' stroke='white' stroke-width='1' />
+  <text x='760.0' y='149.0' text-anchor='middle'>2.80</text>
+  <rect x='800' y='130' width='80' height='30' fill='rgb(145,173,197)' stroke='white' stroke-width='1' />
+  <text x='840.0' y='149.0' text-anchor='middle'>3.66</text>
+  <text x='150' y='179.0' text-anchor='end'>Salesforce_Llama-xLAM-2-70b-fc-r</text>
+  <rect x='160' y='160' width='80' height='30' fill='rgb(48,111,175)' stroke='white' stroke-width='1' />
+  <text x='200.0' y='179.0' text-anchor='middle'>0.51</text>
+  <rect x='240' y='160' width='80' height='30' fill='rgb(42,107,174)' stroke='white' stroke-width='1' />
+  <text x='280.0' y='179.0' text-anchor='middle'>0.29</text>
+  <rect x='320' y='160' width='80' height='30' fill='rgb(51,113,176)' stroke='white' stroke-width='1' />
+  <text x='360.0' y='179.0' text-anchor='middle'>0.59</text>
+  <rect x='400' y='160' width='80' height='30' fill='rgb(42,107,174)' stroke='white' stroke-width='1' />
+  <text x='440.0' y='179.0' text-anchor='middle'>0.29</text>
+  <rect x='480' y='160' width='80' height='30' fill='rgb(48,111,175)' stroke='white' stroke-width='1' />
+  <text x='520.0' y='179.0' text-anchor='middle'>0.51</text>
+  <rect x='560' y='160' width='80' height='30' fill='rgb(33,102,172)' stroke='white' stroke-width='1' />
+  <text x='600.0' y='179.0' text-anchor='middle'>0.00</text>
+  <rect x='640' y='160' width='80' height='30' fill='rgb(51,113,176)' stroke='white' stroke-width='1' />
+  <text x='680.0' y='179.0' text-anchor='middle'>0.59</text>
+  <rect x='720' y='160' width='80' height='30' fill='rgb(51,113,176)' stroke='white' stroke-width='1' />
+  <text x='760.0' y='179.0' text-anchor='middle'>0.59</text>
+  <rect x='800' y='160' width='80' height='30' fill='rgb(33,102,172)' stroke='white' stroke-width='1' />
+  <text x='840.0' y='179.0' text-anchor='middle'>0.00</text>
+  <text x='150' y='209.0' text-anchor='end'>Salesforce_Llama-xLAM-2-8b-fc-r</text>
+  <rect x='160' y='190' width='80' height='30' fill='rgb(42,107,174)' stroke='white' stroke-width='1' />
+  <text x='200.0' y='209.0' text-anchor='middle'>0.29</text>
+  <rect x='240' y='190' width='80' height='30' fill='rgb(56,117,177)' stroke='white' stroke-width='1' />
+  <text x='280.0' y='209.0' text-anchor='middle'>0.78</text>
+  <rect x='320' y='190' width='80' height='30' fill='rgb(42,107,174)' stroke='white' stroke-width='1' />
+  <text x='360.0' y='209.0' text-anchor='middle'>0.29</text>
+  <rect x='400' y='190' width='80' height='30' fill='rgb(42,107,174)' stroke='white' stroke-width='1' />
+  <text x='440.0' y='209.0' text-anchor='middle'>0.29</text>
+  <rect x='480' y='190' width='80' height='30' fill='rgb(42,107,174)' stroke='white' stroke-width='1' />
+  <text x='520.0' y='209.0' text-anchor='middle'>0.29</text>
+  <rect x='560' y='190' width='80' height='30' fill='rgb(42,107,174)' stroke='white' stroke-width='1' />
+  <text x='600.0' y='209.0' text-anchor='middle'>0.29</text>
+  <rect x='640' y='190' width='80' height='30' fill='rgb(56,117,177)' stroke='white' stroke-width='1' />
+  <text x='680.0' y='209.0' text-anchor='middle'>0.78</text>
+  <rect x='720' y='190' width='80' height='30' fill='rgb(42,107,174)' stroke='white' stroke-width='1' />
+  <text x='760.0' y='209.0' text-anchor='middle'>0.29</text>
+  <rect x='800' y='190' width='80' height='30' fill='rgb(51,113,176)' stroke='white' stroke-width='1' />
+  <text x='840.0' y='209.0' text-anchor='middle'>0.59</text>
+  <text x='150' y='239.0' text-anchor='end'>Salesforce_xLAM-2-32b-fc-r</text>
+  <rect x='160' y='220' width='80' height='30' fill='rgb(48,111,175)' stroke='white' stroke-width='1' />
+  <text x='200.0' y='239.0' text-anchor='middle'>0.51</text>
+  <rect x='240' y='220' width='80' height='30' fill='rgb(83,134,183)' stroke='white' stroke-width='1' />
+  <text x='280.0' y='239.0' text-anchor='middle'>1.63</text>
+  <rect x='320' y='220' width='80' height='30' fill='rgb(51,113,176)' stroke='white' stroke-width='1' />
+  <text x='360.0' y='239.0' text-anchor='middle'>0.59</text>
+  <rect x='400' y='220' width='80' height='30' fill='rgb(51,113,176)' stroke='white' stroke-width='1' />
+  <text x='440.0' y='239.0' text-anchor='middle'>0.59</text>
+  <rect x='480' y='220' width='80' height='30' fill='rgb(48,111,175)' stroke='white' stroke-width='1' />
+  <text x='520.0' y='239.0' text-anchor='middle'>0.51</text>
+  <rect x='560' y='220' width='80' height='30' fill='rgb(65,122,179)' stroke='white' stroke-width='1' />
+  <text x='600.0' y='239.0' text-anchor='middle'>1.06</text>
+  <rect x='640' y='220' width='80' height='30' fill='rgb(51,113,176)' stroke='white' stroke-width='1' />
+  <text x='680.0' y='239.0' text-anchor='middle'>0.59</text>
+  <rect x='720' y='220' width='80' height='30' fill='rgb(42,107,174)' stroke='white' stroke-width='1' />
+  <text x='760.0' y='239.0' text-anchor='middle'>0.29</text>
+  <rect x='800' y='220' width='80' height='30' fill='rgb(42,107,174)' stroke='white' stroke-width='1' />
+  <text x='840.0' y='239.0' text-anchor='middle'>0.29</text>
+  <text x='150' y='269.0' text-anchor='end'>Salesforce_xLAM-2-3b-fc-r</text>
+  <rect x='160' y='250' width='80' height='30' fill='rgb(72,127,180)' stroke='white' stroke-width='1' />
+  <text x='200.0' y='269.0' text-anchor='middle'>1.28</text>
+  <rect x='240' y='250' width='80' height='30' fill='rgb(48,111,175)' stroke='white' stroke-width='1' />
+  <text x='280.0' y='269.0' text-anchor='middle'>0.51</text>
+  <rect x='320' y='250' width='80' height='30' fill='rgb(48,111,175)' stroke='white' stroke-width='1' />
+  <text x='360.0' y='269.0' text-anchor='middle'>0.51</text>
+  <rect x='400' y='250' width='80' height='30' fill='rgb(42,107,174)' stroke='white' stroke-width='1' />
+  <text x='440.0' y='269.0' text-anchor='middle'>0.29</text>
+  <rect x='480' y='250' width='80' height='30' fill='rgb(48,111,175)' stroke='white' stroke-width='1' />
+  <text x='520.0' y='269.0' text-anchor='middle'>0.51</text>
+  <rect x='560' y='250' width='80' height='30' fill='rgb(42,107,174)' stroke='white' stroke-width='1' />
+  <text x='600.0' y='269.0' text-anchor='middle'>0.29</text>
+  <rect x='640' y='250' width='80' height='30' fill='rgb(48,111,175)' stroke='white' stroke-width='1' />
+  <text x='680.0' y='269.0' text-anchor='middle'>0.51</text>
+  <rect x='720' y='250' width='80' height='30' fill='rgb(42,107,174)' stroke='white' stroke-width='1' />
+  <text x='760.0' y='269.0' text-anchor='middle'>0.29</text>
+  <rect x='800' y='250' width='80' height='30' fill='rgb(51,113,176)' stroke='white' stroke-width='1' />
+  <text x='840.0' y='269.0' text-anchor='middle'>0.59</text>
+  <text x='150' y='299.0' text-anchor='end'>Team-ACE_ToolACE-2-8B</text>
+  <rect x='160' y='280' width='80' height='30' fill='rgb(56,117,177)' stroke='white' stroke-width='1' />
+  <text x='200.0' y='299.0' text-anchor='middle'>0.78</text>
+  <rect x='240' y='280' width='80' height='30' fill='rgb(56,117,177)' stroke='white' stroke-width='1' />
+  <text x='280.0' y='299.0' text-anchor='middle'>0.78</text>
+  <rect x='320' y='280' width='80' height='30' fill='rgb(33,102,172)' stroke='white' stroke-width='1' />
+  <text x='360.0' y='299.0' text-anchor='middle'>0.00</text>
+  <rect x='400' y='280' width='80' height='30' fill='rgb(56,117,177)' stroke='white' stroke-width='1' />
+  <text x='440.0' y='299.0' text-anchor='middle'>0.78</text>
+  <rect x='480' y='280' width='80' height='30' fill='rgb(60,119,178)' stroke='white' stroke-width='1' />
+  <text x='520.0' y='299.0' text-anchor='middle'>0.88</text>
+  <rect x='560' y='280' width='80' height='30' fill='rgb(42,107,174)' stroke='white' stroke-width='1' />
+  <text x='600.0' y='299.0' text-anchor='middle'>0.29</text>
+  <rect x='640' y='280' width='80' height='30' fill='rgb(51,113,176)' stroke='white' stroke-width='1' />
+  <text x='680.0' y='299.0' text-anchor='middle'>0.59</text>
+  <rect x='720' y='280' width='80' height='30' fill='rgb(65,122,179)' stroke='white' stroke-width='1' />
+  <text x='760.0' y='299.0' text-anchor='middle'>1.06</text>
+  <rect x='800' y='280' width='80' height='30' fill='rgb(65,122,179)' stroke='white' stroke-width='1' />
+  <text x='840.0' y='299.0' text-anchor='middle'>1.06</text>
+  <text x='150' y='329.0' text-anchor='end'>watt-ai_watt-tool-70B</text>
+  <rect x='160' y='310' width='80' height='30' fill='rgb(80,132,182)' stroke='white' stroke-width='1' />
+  <text x='200.0' y='329.0' text-anchor='middle'>1.55</text>
+  <rect x='240' y='310' width='80' height='30' fill='rgb(56,117,177)' stroke='white' stroke-width='1' />
+  <text x='280.0' y='329.0' text-anchor='middle'>0.78</text>
+  <rect x='320' y='310' width='80' height='30' fill='rgb(79,131,182)' stroke='white' stroke-width='1' />
+  <text x='360.0' y='329.0' text-anchor='middle'>1.52</text>
+  <rect x='400' y='310' width='80' height='30' fill='rgb(89,137,184)' stroke='white' stroke-width='1' />
+  <text x='440.0' y='329.0' text-anchor='middle'>1.83</text>
+  <rect x='480' y='310' width='80' height='30' fill='rgb(69,125,180)' stroke='white' stroke-width='1' />
+  <text x='520.0' y='329.0' text-anchor='middle'>1.17</text>
+  <rect x='560' y='310' width='80' height='30' fill='rgb(78,130,182)' stroke='white' stroke-width='1' />
+  <text x='600.0' y='329.0' text-anchor='middle'>1.47</text>
+  <rect x='640' y='310' width='80' height='30' fill='rgb(83,134,183)' stroke='white' stroke-width='1' />
+  <text x='680.0' y='329.0' text-anchor='middle'>1.63</text>
+  <rect x='720' y='310' width='80' height='30' fill='rgb(92,139,185)' stroke='white' stroke-width='1' />
+  <text x='760.0' y='329.0' text-anchor='middle'>1.92</text>
+  <rect x='800' y='310' width='80' height='30' fill='rgb(83,134,183)' stroke='white' stroke-width='1' />
+  <text x='840.0' y='329.0' text-anchor='middle'>1.63</text>
+  <text x='150' y='359.0' text-anchor='end'>watt-ai_watt-tool-8B</text>
+  <rect x='160' y='340' width='80' height='30' fill='rgb(42,107,174)' stroke='white' stroke-width='1' />
+  <text x='200.0' y='359.0' text-anchor='middle'>0.29</text>
+  <rect x='240' y='340' width='80' height='30' fill='rgb(51,113,176)' stroke='white' stroke-width='1' />
+  <text x='280.0' y='359.0' text-anchor='middle'>0.59</text>
+  <rect x='320' y='340' width='80' height='30' fill='rgb(60,119,178)' stroke='white' stroke-width='1' />
+  <text x='360.0' y='359.0' text-anchor='middle'>0.88</text>
+  <rect x='400' y='340' width='80' height='30' fill='rgb(60,119,178)' stroke='white' stroke-width='1' />
+  <text x='440.0' y='359.0' text-anchor='middle'>0.88</text>
+  <rect x='480' y='340' width='80' height='30' fill='rgb(48,111,175)' stroke='white' stroke-width='1' />
+  <text x='520.0' y='359.0' text-anchor='middle'>0.51</text>
+  <rect x='560' y='340' width='80' height='30' fill='rgb(56,117,177)' stroke='white' stroke-width='1' />
+  <text x='600.0' y='359.0' text-anchor='middle'>0.78</text>
+  <rect x='640' y='340' width='80' height='30' fill='rgb(51,113,176)' stroke='white' stroke-width='1' />
+  <text x='680.0' y='359.0' text-anchor='middle'>0.59</text>
+  <rect x='720' y='340' width='80' height='30' fill='rgb(42,107,174)' stroke='white' stroke-width='1' />
+  <text x='760.0' y='359.0' text-anchor='middle'>0.29</text>
+  <rect x='800' y='340' width='80' height='30' fill='rgb(56,117,177)' stroke='white' stroke-width='1' />
+  <text x='840.0' y='359.0' text-anchor='middle'>0.78</text>
+  <rect x='160.0' y='400' width='8.2' height='20' fill='rgb(33,102,172)' stroke='none' />
+  <rect x='167.27272727272728' y='400' width='8.2' height='20' fill='rgb(35,103,172)' stroke='none' />
+  <rect x='174.54545454545456' y='400' width='8.2' height='20' fill='rgb(37,104,173)' stroke='none' />
+  <rect x='181.8181818181818' y='400' width='8.2' height='20' fill='rgb(39,106,173)' stroke='none' />
+  <rect x='189.0909090909091' y='400' width='8.2' height='20' fill='rgb(41,107,174)' stroke='none' />
+  <rect x='196.36363636363637' y='400' width='8.2' height='20' fill='rgb(44,109,174)' stroke='none' />
+  <rect x='203.63636363636363' y='400' width='8.2' height='20' fill='rgb(46,110,175)' stroke='none' />
+  <rect x='210.9090909090909' y='400' width='8.2' height='20' fill='rgb(48,111,175)' stroke='none' />
+  <rect x='218.1818181818182' y='400' width='8.2' height='20' fill='rgb(50,113,176)' stroke='none' />
+  <rect x='225.45454545454544' y='400' width='8.2' height='20' fill='rgb(53,114,176)' stroke='none' />
+  <rect x='232.72727272727272' y='400' width='8.2' height='20' fill='rgb(55,116,177)' stroke='none' />
+  <rect x='240.0' y='400' width='8.2' height='20' fill='rgb(57,117,177)' stroke='none' />
+  <rect x='247.27272727272728' y='400' width='8.2' height='20' fill='rgb(59,118,178)' stroke='none' />
+  <rect x='254.54545454545456' y='400' width='8.2' height='20' fill='rgb(61,120,178)' stroke='none' />
+  <rect x='261.8181818181818' y='400' width='8.2' height='20' fill='rgb(64,121,179)' stroke='none' />
+  <rect x='269.0909090909091' y='400' width='8.2' height='20' fill='rgb(66,123,179)' stroke='none' />
+  <rect x='276.3636363636364' y='400' width='8.2' height='20' fill='rgb(68,124,180)' stroke='none' />
+  <rect x='283.6363636363636' y='400' width='8.2' height='20' fill='rgb(70,126,180)' stroke='none' />
+  <rect x='290.9090909090909' y='400' width='8.2' height='20' fill='rgb(73,127,181)' stroke='none' />
+  <rect x='298.18181818181813' y='400' width='8.2' height='20' fill='rgb(75,128,181)' stroke='none' />
+  <rect x='305.45454545454544' y='400' width='8.2' height='20' fill='rgb(77,130,182)' stroke='none' />
+  <rect x='312.72727272727275' y='400' width='8.2' height='20' fill='rgb(79,131,182)' stroke='none' />
+  <rect x='320.0' y='400' width='8.2' height='20' fill='rgb(81,133,183)' stroke='none' />
+  <rect x='327.27272727272725' y='400' width='8.2' height='20' fill='rgb(84,134,183)' stroke='none' />
+  <rect x='334.54545454545456' y='400' width='8.2' height='20' fill='rgb(86,135,184)' stroke='none' />
+  <rect x='341.81818181818187' y='400' width='8.2' height='20' fill='rgb(88,137,184)' stroke='none' />
+  <rect x='349.0909090909091' y='400' width='8.2' height='20' fill='rgb(90,138,185)' stroke='none' />
+  <rect x='356.3636363636364' y='400' width='8.2' height='20' fill='rgb(93,140,185)' stroke='none' />
+  <rect x='363.6363636363636' y='400' width='8.2' height='20' fill='rgb(95,141,186)' stroke='none' />
+  <rect x='370.9090909090909' y='400' width='8.2' height='20' fill='rgb(97,143,186)' stroke='none' />
+  <rect x='378.1818181818182' y='400' width='8.2' height='20' fill='rgb(99,144,187)' stroke='none' />
+  <rect x='385.4545454545455' y='400' width='8.2' height='20' fill='rgb(101,145,187)' stroke='none' />
+  <rect x='392.72727272727275' y='400' width='8.2' height='20' fill='rgb(104,147,188)' stroke='none' />
+  <rect x='400.0' y='400' width='8.2' height='20' fill='rgb(106,148,188)' stroke='none' />
+  <rect x='407.27272727272725' y='400' width='8.2' height='20' fill='rgb(108,150,189)' stroke='none' />
+  <rect x='414.5454545454545' y='400' width='8.2' height='20' fill='rgb(110,151,189)' stroke='none' />
+  <rect x='421.8181818181818' y='400' width='8.2' height='20' fill='rgb(113,152,190)' stroke='none' />
+  <rect x='429.0909090909091' y='400' width='8.2' height='20' fill='rgb(115,154,190)' stroke='none' />
+  <rect x='436.3636363636363' y='400' width='8.2' height='20' fill='rgb(117,155,191)' stroke='none' />
+  <rect x='443.6363636363636' y='400' width='8.2' height='20' fill='rgb(119,157,191)' stroke='none' />
+  <rect x='450.9090909090909' y='400' width='8.2' height='20' fill='rgb(121,158,192)' stroke='none' />
+  <rect x='458.1818181818182' y='400' width='8.2' height='20' fill='rgb(124,159,192)' stroke='none' />
+  <rect x='465.45454545454544' y='400' width='8.2' height='20' fill='rgb(126,161,193)' stroke='none' />
+  <rect x='472.72727272727275' y='400' width='8.2' height='20' fill='rgb(128,162,193)' stroke='none' />
+  <rect x='480.0' y='400' width='8.2' height='20' fill='rgb(130,164,194)' stroke='none' />
+  <rect x='487.27272727272725' y='400' width='8.2' height='20' fill='rgb(133,165,194)' stroke='none' />
+  <rect x='494.54545454545456' y='400' width='8.2' height='20' fill='rgb(135,167,195)' stroke='none' />
+  <rect x='501.8181818181818' y='400' width='8.2' height='20' fill='rgb(137,168,195)' stroke='none' />
+  <rect x='509.0909090909091' y='400' width='8.2' height='20' fill='rgb(139,169,196)' stroke='none' />
+  <rect x='516.3636363636364' y='400' width='8.2' height='20' fill='rgb(141,171,196)' stroke='none' />
+  <rect x='523.6363636363637' y='400' width='8.2' height='20' fill='rgb(144,172,197)' stroke='none' />
+  <rect x='530.9090909090909' y='400' width='8.2' height='20' fill='rgb(146,174,197)' stroke='none' />
+  <rect x='538.1818181818182' y='400' width='8.2' height='20' fill='rgb(148,175,198)' stroke='none' />
+  <rect x='545.4545454545455' y='400' width='8.2' height='20' fill='rgb(150,176,198)' stroke='none' />
+  <rect x='552.7272727272727' y='400' width='8.2' height='20' fill='rgb(153,178,199)' stroke='none' />
+  <rect x='560.0' y='400' width='8.2' height='20' fill='rgb(155,179,199)' stroke='none' />
+  <rect x='567.2727272727273' y='400' width='8.2' height='20' fill='rgb(157,181,200)' stroke='none' />
+  <rect x='574.5454545454545' y='400' width='8.2' height='20' fill='rgb(159,182,200)' stroke='none' />
+  <rect x='581.8181818181818' y='400' width='8.2' height='20' fill='rgb(161,184,201)' stroke='none' />
+  <rect x='589.090909090909' y='400' width='8.2' height='20' fill='rgb(164,185,201)' stroke='none' />
+  <rect x='596.3636363636364' y='400' width='8.2' height='20' fill='rgb(166,186,202)' stroke='none' />
+  <rect x='603.6363636363636' y='400' width='8.2' height='20' fill='rgb(168,188,202)' stroke='none' />
+  <rect x='610.909090909091' y='400' width='8.2' height='20' fill='rgb(170,189,203)' stroke='none' />
+  <rect x='618.1818181818182' y='400' width='8.2' height='20' fill='rgb(173,191,203)' stroke='none' />
+  <rect x='625.4545454545455' y='400' width='8.2' height='20' fill='rgb(175,192,204)' stroke='none' />
+  <rect x='632.7272727272727' y='400' width='8.2' height='20' fill='rgb(177,193,204)' stroke='none' />
+  <rect x='640.0' y='400' width='8.2' height='20' fill='rgb(179,195,205)' stroke='none' />
+  <rect x='647.2727272727273' y='400' width='8.2' height='20' fill='rgb(181,196,205)' stroke='none' />
+  <rect x='654.5454545454545' y='400' width='8.2' height='20' fill='rgb(184,198,206)' stroke='none' />
+  <rect x='661.8181818181819' y='400' width='8.2' height='20' fill='rgb(186,199,206)' stroke='none' />
+  <rect x='669.090909090909' y='400' width='8.2' height='20' fill='rgb(188,200,207)' stroke='none' />
+  <rect x='676.3636363636364' y='400' width='8.2' height='20' fill='rgb(190,202,207)' stroke='none' />
+  <rect x='683.6363636363636' y='400' width='8.2' height='20' fill='rgb(193,203,208)' stroke='none' />
+  <rect x='690.9090909090909' y='400' width='8.2' height='20' fill='rgb(195,205,208)' stroke='none' />
+  <rect x='698.1818181818182' y='400' width='8.2' height='20' fill='rgb(197,206,209)' stroke='none' />
+  <rect x='705.4545454545455' y='400' width='8.2' height='20' fill='rgb(199,208,209)' stroke='none' />
+  <rect x='712.7272727272726' y='400' width='8.2' height='20' fill='rgb(201,209,210)' stroke='none' />
+  <rect x='720.0' y='400' width='8.2' height='20' fill='rgb(204,210,210)' stroke='none' />
+  <rect x='727.2727272727273' y='400' width='8.2' height='20' fill='rgb(206,212,211)' stroke='none' />
+  <rect x='734.5454545454546' y='400' width='8.2' height='20' fill='rgb(208,213,211)' stroke='none' />
+  <rect x='741.8181818181818' y='400' width='8.2' height='20' fill='rgb(210,215,212)' stroke='none' />
+  <rect x='749.0909090909091' y='400' width='8.2' height='20' fill='rgb(213,216,212)' stroke='none' />
+  <rect x='756.3636363636364' y='400' width='8.2' height='20' fill='rgb(215,217,213)' stroke='none' />
+  <rect x='763.6363636363636' y='400' width='8.2' height='20' fill='rgb(217,219,213)' stroke='none' />
+  <rect x='770.9090909090909' y='400' width='8.2' height='20' fill='rgb(219,220,214)' stroke='none' />
+  <rect x='778.1818181818181' y='400' width='8.2' height='20' fill='rgb(221,222,214)' stroke='none' />
+  <rect x='785.4545454545455' y='400' width='8.2' height='20' fill='rgb(224,223,215)' stroke='none' />
+  <rect x='792.7272727272727' y='400' width='8.2' height='20' fill='rgb(226,225,215)' stroke='none' />
+  <rect x='800.0' y='400' width='8.2' height='20' fill='rgb(228,226,216)' stroke='none' />
+  <rect x='807.2727272727273' y='400' width='8.2' height='20' fill='rgb(230,227,216)' stroke='none' />
+  <rect x='814.5454545454545' y='400' width='8.2' height='20' fill='rgb(233,229,217)' stroke='none' />
+  <rect x='821.8181818181819' y='400' width='8.2' height='20' fill='rgb(235,230,217)' stroke='none' />
+  <rect x='829.0909090909091' y='400' width='8.2' height='20' fill='rgb(237,232,218)' stroke='none' />
+  <rect x='836.3636363636364' y='400' width='8.2' height='20' fill='rgb(239,233,218)' stroke='none' />
+  <rect x='843.6363636363636' y='400' width='8.2' height='20' fill='rgb(241,234,219)' stroke='none' />
+  <rect x='850.9090909090909' y='400' width='8.2' height='20' fill='rgb(244,236,219)' stroke='none' />
+  <rect x='858.1818181818182' y='400' width='8.2' height='20' fill='rgb(246,237,220)' stroke='none' />
+  <rect x='865.4545454545455' y='400' width='8.2' height='20' fill='rgb(248,239,220)' stroke='none' />
+  <rect x='872.7272727272727' y='400' width='8.2' height='20' fill='rgb(250,240,221)' stroke='none' />
+  <rect x='880.0' y='400' width='8.2' height='20' fill='rgb(253,242,222)' stroke='none' />
+  <text x='160' y='435' text-anchor='start'>0.00</text>
+  <text x='520.0' y='435' text-anchor='middle'>3.57</text>
+  <text x='880' y='435' text-anchor='end'>7.13</text>
+</svg>

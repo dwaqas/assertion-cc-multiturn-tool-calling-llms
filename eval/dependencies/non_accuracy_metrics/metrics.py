@@ -1,51 +1,20 @@
 from __future__ import annotations
 import logging
-import math
-import statistics
-from collections import Counter
-from typing import Dict, Iterable, List, Tuple
+from typing import Dict, List, Optional, Tuple
 from .structures import (
     AssertionInfo,
     CaseCompliance,
-    CaseStepDelta,
-    CaseToolUsage,
     ComplianceAggregate,
     EvalCase,
     MetricsBundle,
     OutcomeGroupMetrics,
-    StepMetrics,
-    ToolErrorMetrics,
     TurnSummary,
-    ErrorTypeShift,
 )
 
 LOGGER = logging.getLogger(__name__)
 
-CORRECTION_PHRASES = (
-    "actually",
-    "correction",
-    "i was mistaken",
-    "sorry",
-    "apolog",
-    "let me correct",
-    "retry without",
-    "that was wrong",
-)
-
-def _collect_text_after_turn(case: EvalCase, turn_index: int) -> str:
-    fragments: List[str] = []
-    for turn in case.turns[turn_index + 1 :]:
-        fragments.extend(turn.text_messages)
-    return " ".join(fragments).lower()
-
-def _final_text(case: EvalCase) -> str:
-    for turn in reversed(case.turns):
-        if turn.text_messages:
-            return " ".join(turn.text_messages).lower()
-    return case.all_text.lower()
 
 def _classify_compliance(case: EvalCase, assertion: AssertionInfo) -> CaseCompliance:
-
     target = assertion.target_function
     if not target:
         # No function to evaluate → unknown case
@@ -53,191 +22,227 @@ def _classify_compliance(case: EvalCase, assertion: AssertionInfo) -> CaseCompli
             case_id=case.case_id,
             status="unknown",
             initial_compliance=False,
-            corrected=False,
             target_function=None,
-        )
-
-    if not case.tool_call_sequence:
-        # No recorded tool usage → unknown, not non-compliant
-        return CaseCompliance(
-            case_id=case.case_id,
-            status="unknown",
-            initial_compliance=False,
-            corrected=False,
-            target_function=target,
+            evaluated_turn=None,
         )
 
     target_lower = target.lower()
-    call_sequence = [name.lower() for name in case.tool_call_sequence]
+    evaluated_turn = assertion.turn_idx
+    evaluated_turn_index: Optional[int] = None
 
-    # Compliance simply means: did the model ever call the function?
-    if target_lower in call_sequence:
+    if evaluated_turn is None:
+        scoped_calls = [name.lower() for name in case.tool_call_sequence]
+    else:
+        target_turn: Optional[TurnSummary]
+        if evaluated_turn < 0:
+            target_turn = case.turns[-1] if case.turns else None
+        else:
+            target_turn = next(
+                (turn for turn in case.turns if turn.index == evaluated_turn), None
+            )
+
+        if target_turn is None:
+            if case.turns:
+                LOGGER.debug(
+                    "Missing turn %s for case %s; defaulting to final observed turn",
+                    evaluated_turn,
+                    case.case_id,
+                )
+                target_turn = case.turns[-1]
+            else:
+                return CaseCompliance(
+                    case_id=case.case_id,
+                    status="unknown",
+                    initial_compliance=False,
+                    target_function=target,
+                    evaluated_turn=evaluated_turn,
+                )
+
+        evaluated_turn_index = target_turn.index
+        scoped_calls = [name.lower() for name in target_turn.tool_calls]
+
+    if target_lower in scoped_calls:
         status = "compliant"
         initial_compliance = True
     else:
         status = "non_compliant"
         initial_compliance = False
 
-    # We are intentionally NOT tracking "corrected" anymore
+    if not scoped_calls:
+        status = "non_compliant"
+        initial_compliance = False
+
     return CaseCompliance(
         case_id=case.case_id,
         status=status,
         initial_compliance=initial_compliance,
-        corrected=False,
         target_function=target,
+        evaluated_turn=evaluated_turn_index if evaluated_turn_index is not None else evaluated_turn,
     )
 
 
-def compute_compliance_rate(compliance_cases: List[CaseCompliance]) -> dict:
-    total = len(compliance_cases)
-    compliant = sum(1 for c in compliance_cases if c.status == "compliant")
-    non_compliant = sum(1 for c in compliance_cases if c.status == "non_compliant")
-    unknown = sum(1 for c in compliance_cases if c.status == "unknown")
-
-    return {
-        "total_cases": total,
-        "compliance_rate": compliant / total if total > 0 else 0.0,
-        "non_compliance_rate": non_compliant / total if total > 0 else 0.0,
-        "unknown_rate": unknown / total if total > 0 else 0.0,
-        "counts": {
-            "compliant": compliant,
-            "non_compliant": non_compliant,
-            "unknown": unknown
-        }
-    }
-
-
-def _quantile(data: List[float], quantile: float) -> float:
-    if not data:
-        return 0.0
-    if len(data) == 1:
-        return float(data[0])
-    ordered = sorted(float(x) for x in data)
-    k = (len(ordered) - 1) * quantile
-    f = math.floor(k)
-    c = math.ceil(k)
-    if f == c:
-        return ordered[int(k)]
-    return ordered[f] * (c - k) + ordered[c] * (k - f)
-
-def compute_step_metrics(
-    assert_cases: Dict[str, EvalCase],
-    no_assert_cases: Dict[str, EvalCase],
-) -> StepMetrics:
-    per_case: List[CaseStepDelta] = []
-
-    for case_id, assert_case in assert_cases.items():
-        other = no_assert_cases.get(case_id)
-        if not other:
-            LOGGER.warning("No matching no-assert case for %s; skipping step delta", case_id)
-            continue
-        delta = assert_case.total_steps - other.total_steps
-        per_case.append(
-            CaseStepDelta(
-                case_id=case_id,
-                assert_steps=assert_case.total_steps,
-                no_assert_steps=other.total_steps,
-                delta=delta,
-            )
+def _classify_followup_compliance(case: EvalCase, assertion: AssertionInfo) -> CaseCompliance:
+    followup = (
+        (assertion.followup_function or {}).get("name")
+        if assertion.followup_function
+        else assertion.followup_function_name
+    )
+    if not followup:
+        return CaseCompliance(
+            case_id=case.case_id,
+            status="unknown",
+            initial_compliance=False,
+            target_function=None,
+            evaluated_turn=assertion.turn_idx,
         )
 
-    deltas = [c.delta for c in per_case]
-    mean_delta = statistics.fmean(deltas) if deltas else 0.0
-    median_delta = float(statistics.median(deltas)) if deltas else 0.0
-    p90_delta = _quantile([float(d) for d in deltas], 0.90) if deltas else 0.0
+    followup_lower = followup.lower()
+    target_turn = assertion.turn_idx if assertion.turn_idx is not None else 0
+    evaluated_turn_index: Optional[int] = None
+    scoped_calls: List[str] = []
 
-    return StepMetrics(
-        mean_delta=mean_delta,
-        median_delta=median_delta,
-        p90_delta=p90_delta,
-        per_case=per_case,
+    if not case.turns:
+        return CaseCompliance(
+            case_id=case.case_id,
+            status="unknown",
+            initial_compliance=False,
+            target_function=followup,
+            evaluated_turn=target_turn,
+        )
+
+    turns_sorted = sorted(case.turns, key=lambda t: t.index)
+    for turn in turns_sorted:
+        if turn.index < (target_turn if target_turn >= 0 else turns_sorted[-1].index):
+            continue
+        evaluated_turn_index = turn.index
+        scoped_calls.extend([name.lower() for name in turn.tool_calls])
+        if followup_lower in scoped_calls:
+            break
+
+    status = "compliant" if followup_lower in scoped_calls else "non_compliant"
+
+    return CaseCompliance(
+        case_id=case.case_id,
+        status=status,
+        initial_compliance=(status == "compliant"),
+        target_function=followup,
+        evaluated_turn=evaluated_turn_index,
     )
 
-def compute_tool_error_metrics(
-    assert_cases: Dict[str, EvalCase],
-    no_assert_cases: Dict[str, EvalCase],
-) -> ToolErrorMetrics:
-    per_case: List[CaseToolUsage] = []
-    total_assert_calls = 0
-    total_no_calls = 0
-    total_assert_errors = 0
-    total_no_errors = 0
-    assert_error_counter: Counter[str] = Counter()
-    no_error_counter: Counter[str] = Counter()
 
-    for case_id, assert_case in assert_cases.items():
-        other = no_assert_cases.get(case_id)
-        if not other:
-            LOGGER.warning("No matching no-assert case for %s; skipping tool error delta", case_id)
+def compute_compliance_metrics(
+    assert_cases: Dict[str, EvalCase],
+    metadata: Dict[str, AssertionInfo],
+    excluded_ids: Optional[set[str]] = None,
+) -> Tuple[List[CaseCompliance], ComplianceAggregate]:
+    compliance_cases: List[CaseCompliance] = []
+    considered_cases = 0
+    compliant_count = 0
+    non_compliant_count = 0
+    excluded_ids = excluded_ids or set()
+
+    for case_id, case in assert_cases.items():
+        info = metadata.get(case_id)
+        if info is None:
+            compliance = CaseCompliance(
+                case_id=case.case_id,
+                status="unknown",
+                initial_compliance=False,
+                target_function=None,
+                evaluated_turn=None,
+            )
+        else:
+            compliance = _classify_compliance(case, info)
+
+        compliance_cases.append(compliance)
+
+        if compliance.status == "unknown" or case_id in excluded_ids:
             continue
 
-        per_case.append(
-            CaseToolUsage(
-                case_id=case_id,
-                assert_tool_calls=assert_case.total_tool_calls,
-                assert_errors=assert_case.total_errors,
-                no_assert_tool_calls=other.total_tool_calls,
-                no_assert_errors=other.total_errors,
-            )
-        )
+        considered_cases += 1
+        if compliance.status == "compliant":
+            compliant_count += 1
+        else:
+            non_compliant_count += 1
 
-        total_assert_calls += assert_case.total_tool_calls
-        total_no_calls += other.total_tool_calls
-        total_assert_errors += assert_case.total_errors
-        total_no_errors += other.total_errors
-        assert_error_counter.update(assert_case.error_types)
-        no_error_counter.update(other.error_types)
+    denominator = considered_cases if considered_cases else 1
+    compliance_rate = compliant_count / denominator
+    non_compliance_rate = non_compliant_count / denominator
 
-    assert_rate = (total_assert_errors / total_assert_calls) if total_assert_calls else 0.0
-    no_rate = (total_no_errors / total_no_calls) if total_no_calls else 0.0
-    delta_rate = assert_rate - no_rate
-
-    # Determine top error type shifts
-    combined_types = set(assert_error_counter) | set(no_error_counter)
-    shifts: List[ErrorTypeShift] = []
-    for error_type in combined_types:
-        a_count = assert_error_counter.get(error_type, 0)
-        n_count = no_error_counter.get(error_type, 0)
-        shifts.append(
-            ErrorTypeShift(
-                error_type=error_type,
-                assert_count=a_count,
-                no_assert_count=n_count,
-                delta=a_count - n_count,
-            )
-        )
-
-    shifts.sort(key=lambda item: abs(item.delta), reverse=True)
-    top_shifts = shifts[:5]
-
-    return ToolErrorMetrics(
-        assert_error_rate=assert_rate,
-        no_assert_error_rate=no_rate,
-        delta_error_rate=delta_rate,
-        per_case=per_case,
-        top_error_types=top_shifts,
+    aggregate = ComplianceAggregate(
+        total_cases=len(assert_cases),
+        considered_cases=considered_cases,
+        compliance_rate=compliance_rate,
+        non_compliance_rate=non_compliance_rate,
     )
+
+    compliance_cases.sort(key=lambda entry: entry.case_id)
+    return compliance_cases, aggregate
+
+
+def compute_followup_compliance_metrics(
+    assert_cases: Dict[str, EvalCase],
+    metadata: Dict[str, AssertionInfo],
+    excluded_ids: Optional[set[str]] = None,
+) -> Tuple[List[CaseCompliance], ComplianceAggregate]:
+    compliance_cases: List[CaseCompliance] = []
+    considered_cases = 0
+    compliant_count = 0
+    non_compliant_count = 0
+    excluded_ids = excluded_ids or set()
+
+    for case_id, case in assert_cases.items():
+        info = metadata.get(case_id)
+        if info is None:
+            compliance = CaseCompliance(
+                case_id=case.case_id,
+                status="unknown",
+                initial_compliance=False,
+                target_function=None,
+                evaluated_turn=None,
+            )
+        else:
+            compliance = _classify_followup_compliance(case, info)
+
+        compliance_cases.append(compliance)
+
+        if compliance.status == "unknown" or case_id in excluded_ids:
+            continue
+
+        considered_cases += 1
+        if compliance.status == "compliant":
+            compliant_count += 1
+        else:
+            non_compliant_count += 1
+
+    denominator = considered_cases if considered_cases else 1
+    compliance_rate = compliant_count / denominator
+    non_compliance_rate = non_compliant_count / denominator
+
+    aggregate = ComplianceAggregate(
+        total_cases=len(assert_cases),
+        considered_cases=considered_cases,
+        compliance_rate=compliance_rate,
+        non_compliance_rate=non_compliance_rate,
+    )
+
+    compliance_cases.sort(key=lambda entry: entry.case_id)
+    return compliance_cases, aggregate
+
 
 def bundle_metrics(
     compliance_cases: List[CaseCompliance],
     compliance_agg: ComplianceAggregate,
-    step_metrics: StepMetrics,
-    tool_error_metrics: ToolErrorMetrics,
     outcome_groups: List[OutcomeGroupMetrics],
 ) -> MetricsBundle:
-
     compliant_cases = [c for c in compliance_cases if c.status == "compliant"]
     non_compliant_cases = [c for c in compliance_cases if c.status == "non_compliant"]
     unknown_cases = [c for c in compliance_cases if c.status == "unknown"]
 
     return MetricsBundle(
         compliance=compliance_agg,
-        steps=step_metrics,
-        tool_errors=tool_error_metrics,
         compliant_cases=compliant_cases,
         non_compliant_cases=non_compliant_cases,
         unknown_cases=unknown_cases,
         outcome_groups=outcome_groups,
     )
-
-

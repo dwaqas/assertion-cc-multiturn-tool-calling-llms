@@ -25,7 +25,14 @@ from dependencies.gen_f_sa import (
 DEFAULT_INJECTION_FIELD = "system_policy_note"
 DEFAULT_MODEL = "gemini-2.5-pro"
 PROMPT_LOG_PATH = "gen_f_sa_prompts.temp.log"
-CSV_HEADER = ["id", "turn_idx", "target_function", "system_policy_note", "justification"]
+CSV_HEADER = [
+    "id",
+    "turn_idx",
+    "target_function",
+    "followup_function",
+    "system_policy_note",
+    "justification",
+]
 
 def parse_items(spec: str) -> List[int]:
     text = (spec or "").strip() # Normalise input spec;
@@ -66,18 +73,6 @@ def _load_bfcl(path: Path) -> Dict[int, Dict[str, object]]:
             continue
         by_number[number] = item # Keep last-seen variant;
     return by_number
-
-def _collect_class_docs(item: Dict[str, object],
-                        docs_by_stem: Dict[str, List[Dict[str, str]]]) -> Tuple[List[Tuple[str, List[Dict[str, str]]]], Set[str]]:
-    available_stems = docs_by_stem.keys() # Candidate doc stems;
-    seen_stems: Set[str] = set() # Track duplicates;
-    bundles: List[Tuple[str, List[Dict[str, str]]]] = [] # (class, docs);
-    for class_name in item.get("involved_classes", []) or []:
-        stem = resolve_class_to_stem(class_name, available_stems)
-        if stem and stem not in seen_stems:
-            seen_stems.add(stem)
-            bundles.append((class_name, docs_by_stem.get(stem, [])))
-    return bundles, seen_stems
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Generate function-sourced system policy notes.")
@@ -191,13 +186,64 @@ def main() -> None:
                 "error": "no_write_functions",
             }, ensure_ascii=False) + "\n")
             continue
-        class_docs, seen_stems = _collect_class_docs(item, docs_by_stem) # Base doc set;
-        for cand in candidates:
-            stem = cand.get("stem")
-            if stem and stem not in seen_stems and stem in docs_by_stem:
-                seen_stems.add(stem)
-                class_docs.append((stem, docs_by_stem.get(stem, []))) # Add missing docs;
-        user_prompt = build_user_prompt(turn_text, candidates, class_docs, user_turns) # Compose prompt;
+        stem_label_map: Dict[str, str] = {}
+        available_stems = docs_by_stem.keys()
+        for class_name in item.get("involved_classes", []) or []:
+            stem = resolve_class_to_stem(class_name, available_stems)
+            if stem and stem not in stem_label_map:
+                stem_label_map[stem] = class_name
+
+        turn_stems: List[str] = []
+        seen_turn_stems: Set[str] = set()
+        for call_bundle in raw_calls:
+            info = funcs_by_name.get(call_bundle.get("name"), {})
+            stem = info.get("stem")
+            if stem and stem not in seen_turn_stems:
+                seen_turn_stems.add(stem)
+                turn_stems.append(stem)
+
+        class_docs: List[Tuple[str, List[Dict[str, str]]]] = []
+        followup_options: List[Dict[str, object]] = []
+        followup_seen: Set[str] = set()
+        for stem in turn_stems:
+            docs = docs_by_stem.get(stem, [])
+            if not docs:
+                continue
+            label = stem_label_map.get(stem, stem)
+            class_docs.append((label, docs))
+            for record in docs:
+                raw_name = record.get("name")
+                name = raw_name.strip() if isinstance(raw_name, str) else raw_name
+                if not name or name in followup_seen:
+                    continue
+                if record.get("read_only", False):
+                    continue
+                followup_options.append({
+                    "name": name,
+                    "description": record.get("description", ""),
+                    "stem": label,
+                    "stem_id": stem,
+                    "read_only": record.get("read_only", False),
+                })
+                followup_seen.add(name)
+
+        if not followup_options:
+            skipped += 1
+            out_meta.write(json.dumps({
+                "id": case_id,
+                "prompt_number": idx,
+                "turn_idx": turn_idx,
+                "error": "no_followup_functions",
+            }, ensure_ascii=False) + "\n")
+            continue
+
+        user_prompt = build_user_prompt(
+            turn_text,
+            candidates,
+            class_docs,
+            user_turns,
+            followup_options,
+        ) # Compose prompt;
         prompt_log.write("==== PROMPT START ====\n")
         prompt_log.write(f"ID: {case_id}\n")
         prompt_log.write("-- SYSTEM --\n")
@@ -205,7 +251,18 @@ def main() -> None:
         prompt_log.write("-- USER --\n")
         prompt_log.write(user_prompt + "\n")
         prompt_log.write("==== PROMPT END ====\n")
-        choice = call_gemini_json(model, system_preamble, user_prompt, len(candidates), retries=1) # LLM call;
+        followup_lookup: Dict[str, Dict[str, object]] = {
+            opt["name"]: opt for opt in followup_options
+        }
+        followup_names = list(followup_lookup.keys())
+        choice = call_gemini_json(
+            model,
+            system_preamble,
+            user_prompt,
+            len(candidates),
+            followup_names,
+            retries=1,
+        ) # LLM call;
         try:
             selected_index = int(choice.get("selected_index", 1))
         except (TypeError, ValueError):
@@ -245,6 +302,20 @@ def main() -> None:
                 "raw_llm": choice.get("raw"),
             }, ensure_ascii=False) + "\n")
             continue
+        followup_name = (choice.get("followup_function") or "").strip()
+        followup_entry = followup_lookup.get(followup_name)
+        if not followup_entry:
+            skipped += 1
+            out_meta.write(json.dumps({
+                "id": case_id,
+                "prompt_number": idx,
+                "turn_idx": turn_idx,
+                "error": "invalid_followup_function",
+                "followup_function": followup_name,
+                "available_followups": followup_options,
+                "raw_llm": choice.get("raw"),
+            }, ensure_ascii=False) + "\n")
+            continue
         justification = choice.get("justification", "") # LLM explanation;
         minimal = {
             "id": case_id,
@@ -263,6 +334,9 @@ def main() -> None:
             "candidates": candidates,
             "selected_index": selected_index,
             "selected_function_name": selected["name"],
+            "followup_function_name": followup_name,
+            "followup_function": followup_entry,
+            "followup_options": followup_options,
             "system_policy_note": system_policy_note,
             "justification": justification,
             "user_prompt": user_prompt,
@@ -273,6 +347,7 @@ def main() -> None:
             case_id,
             turn_idx,
             selected["name"],
+            followup_name,
             system_policy_note,
             justification,
         ]) # Review entry;

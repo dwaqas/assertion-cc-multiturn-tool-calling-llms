@@ -1,0 +1,13 @@
+model,f-sa-baseline,f-sa-baseline,f-sa-baseline,f-sa-baseline,f-sa-baseline
+model,CR,CR (success→success),CR (success→failure),CR (failure→success),CR (failure→failure)
+BitAgent_BitAgent-Bounty-8B,18.3% (n=197),12.2% (n=115),37.8% (n=37),25.0% (n=4),17.1% (n=41)
+Qwen_Qwen3-14B-FC,40.1% (n=197),15.0% (n=40),52.6% (n=57),42.9% (n=14),43.0% (n=86)
+Qwen_Qwen3-32B-FC,41.1% (n=197),26.8% (n=56),56.9% (n=51),7.7% (n=13),46.8% (n=77)
+Qwen_Qwen3-8B-FC,27.9% (n=197),12.5% (n=48),42.9% (n=42),23.1% (n=13),29.8% (n=94)
+Salesforce_Llama-xLAM-2-70b-fc-r,22.3% (n=197),13.5% (n=141),80.0% (n=15),0.0% (n=2),33.3% (n=39)
+Salesforce_Llama-xLAM-2-8b-fc-r,21.8% (n=197),13.0% (n=131),54.5% (n=22),0.0% (n=1),32.6% (n=43)
+Salesforce_xLAM-2-32b-fc-r,29.9% (n=197),13.7% (n=117),70.0% (n=40),50.0% (n=2),36.8% (n=38)
+Salesforce_xLAM-2-3b-fc-r,23.4% (n=197),9.9% (n=111),59.3% (n=27),50.0% (n=2),31.6% (n=57)
+Team-ACE_ToolACE-2-8B,32.0% (n=197),14.8% (n=54),76.9% (n=39),0.0% (n=4),25.0% (n=100)
+watt-ai_watt-tool-70B,32.0% (n=197),15.5% (n=110),65.6% (n=32),N/A (n=0),45.5% (n=55)
+watt-ai_watt-tool-8B,17.3% (n=197),12.2% (n=74),31.2% (n=16),0.0% (n=4),19.4% (n=103)

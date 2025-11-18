@@ -1,24 +1,26 @@
 from __future__ import annotations
 import argparse
+import csv
 import json
 import logging
+import statistics
 import sys
 from collections import defaultdict
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
-if __package__ is None or __package__ == "":  # pragma: no cover
+if __package__ is None or __package__ == "":
     sys.path.append(str(Path(__file__).resolve().parents[1]))
-from eval.dependencies.non_accuracy_metrics.loader import load_assertion_metadata, load_score_file, parse_eval_file  # type: ignore
-from eval.dependencies.non_accuracy_metrics.metrics import (  # type: ignore
+from eval.dependencies.non_accuracy_metrics.loader import load_assertion_metadata, load_score_file, parse_eval_file
+from eval.dependencies.non_accuracy_metrics.metrics import (
     bundle_metrics,
     compute_compliance_metrics,
-    compute_step_metrics,
-    compute_tool_error_metrics,
+    compute_followup_compliance_metrics,
 )
-from eval.dependencies.non_accuracy_metrics.plots import plot_compliance, plot_error_rates, plot_step_ecdf
+from eval.dependencies.non_accuracy_metrics.plots import plot_compliance
 from eval.dependencies.non_accuracy_metrics.structures import (
     AssertionInfo,
+    CaseCompliance,
     CaseOutcome,
     EvalCase,
     MetricsBundle,
@@ -29,9 +31,198 @@ LOGGER = logging.getLogger(__name__)
 OUTCOME_DEFINITIONS = {(True, True): ("success_to_success", "Resilient (success→success)"), (True, False): ("success_to_failure", "Regressed (success→failure)"), (False, True): ("failure_to_success", "Improved (failure→success)"), (False, False): ("failure_to_failure", "Persistent failure (failure→failure)")}
 OUTCOME_ORDER = ["success_to_success", "success_to_failure", "failure_to_success", "failure_to_failure"]
 
+DEFAULT_RESULTS_ROOT = Path("data/results")
+DEFAULT_METADATA_ROOT = Path("data/assertions")
+DEFAULT_OUTPUT_DIR = Path("eval/output/non_accuracy")
+
+MODES = {"u-sa", "f-sa", "inter"}
+
+FSA_METADATA_PATH = Path("data/assertions/f-sa-ablation/f-sa-ablation.metadata.jsonl")
+SUMMARY_CSV_NAME = "non_accuracy_summary.csv"
+SUMMARY_JSON_NAME = "non_accuracy_summary.json"
+DETAIL_SUMMARY_FILENAME = "median_summary.json"
+DETAIL_CASES_FILENAME = "median_cases.json"
+DETAIL_REPORT_FILENAME = "median_report.txt"
+AGGREGATED_MODEL_FILENAME = "aggregated_metrics.json"
+PLOTS_SUBDIR = "plots"
+SPECIAL_CASE_IDS = {
+    "multi_turn_base_47",
+    "multi_turn_base_57",
+    "multi_turn_base_157",
+} # Maintain consistent 197-case denominator;
+
+@dataclass(frozen=True)
+class AttemptInfo:
+    name: str
+    path: Path
+    models: List[str]
+    order: int
+
+@dataclass(frozen=True)
+class ScalarMetrics:
+    compliance_rate: float
+    non_compliance_rate: float
+    considered_cases: int
+    total_cases: int
+
+@dataclass
+class AttemptResult:
+    attempt: str
+    model: str
+    metrics: ScalarMetrics
+    bundle: Optional[MetricsBundle] = None
+    compliance_cases: Optional[List[CaseCompliance]] = None
+    outcome_groups: Optional[List[OutcomeGroupMetrics]] = None
+    outcome_cases: Optional[List[CaseOutcome]] = None
+    mode: str = "u-sa"
+
+@dataclass
+class AggregatedModelMetrics:
+    compliance_rate: float
+    non_compliance_rate: float
+    considered_cases: float
+    total_cases: float
+    attempts: List[str]
+    attempt_metrics: List[Tuple[str, ScalarMetrics]]
+    median_attempt: Optional[AttemptResult]
+
 def _configure_logging(verbose: bool = False) -> None:
     level = logging.DEBUG if verbose else logging.INFO
     logging.basicConfig(level=level, format="%(levelname)s: %(message)s")
+
+def _parse_attempt_number(name: str) -> int:
+    if name.startswith("att") and name[3:].isdigit():
+        return int(name[3:])
+    raise ValueError(f"Unexpected attempt directory: {name}")
+
+# Discover per-condition attempts before filtering;
+def _discover_attempts(category_dir: Path) -> List[AttemptInfo]:
+    attempts: List[AttemptInfo] = []
+    if not category_dir.exists():
+        return attempts
+    for child in category_dir.iterdir():
+        if not child.is_dir():
+            continue
+        name = child.name
+        if not name.startswith("att"):
+            continue
+        try:
+            order = _parse_attempt_number(name)
+        except ValueError:
+            LOGGER.debug("Skipping unexpected directory %s", child)
+            continue
+        models = sorted(
+            subdir.name for subdir in child.iterdir() if subdir.is_dir()
+        )
+        if not models:
+            LOGGER.warning("No model directories found under %s", child)
+            continue
+        attempts.append(AttemptInfo(name=name, path=child, models=models, order=order))
+    attempts.sort(key=lambda item: item.order)
+    return attempts
+
+# Locate the metadata file matching a given condition directory;
+def _find_metadata_path(metadata_root: Path, category: str) -> Optional[Path]:
+    candidate_names = [category]
+    if category.endswith("-hedged"):
+        candidate_names.append(category[:-7] + "-confident")
+
+    for idx, name in enumerate(candidate_names):
+        category_dir = metadata_root / name
+        if not category_dir.exists() or not category_dir.is_dir():
+            continue
+        candidates = sorted(category_dir.glob("*.metadata.json*"))
+        if not candidates:
+            continue
+        if idx > 0:
+            LOGGER.info(
+                "Metadata for %s not found; falling back to %s",
+                category,
+                name,
+            )
+        if len(candidates) > 1:
+            LOGGER.warning(
+                "Multiple metadata files found for %s; using %s",
+                name,
+                candidates[0],
+            )
+        return candidates[0]
+
+    LOGGER.warning("No metadata files found for %s", category)
+    return None
+
+
+def _load_metadata(metadata_root: Path, category: str, mode: str) -> Optional[Dict[str, AssertionInfo]]:
+    if mode == "f-sa":
+        if not FSA_METADATA_PATH.exists():
+            LOGGER.warning("F-SA metadata missing at %s", FSA_METADATA_PATH)
+            return None
+        return load_assertion_metadata(FSA_METADATA_PATH)
+
+    if mode == "inter":
+        if category == "assert_f-sa-interaction-confident":
+            return load_assertion_metadata(Path("data/assertions/writeHeavy-confident/write-heavy.confident.metadata.jsonl"))
+        if category == "assert_f-sa-interaction-hedged":
+            hedged = Path("data/assertions/writeHeavy-hedged/write-heavy.hedged.metadata.jsonl")
+            if hedged.exists():
+                return load_assertion_metadata(hedged)
+            confident = Path("data/assertions/writeHeavy-confident/write-heavy.confident.metadata.jsonl")
+            if confident.exists():
+                LOGGER.info(
+                    "Hedged write-heavy metadata missing; falling back to %s",
+                    confident,
+                )
+                return load_assertion_metadata(confident)
+            LOGGER.warning("No metadata found for interaction hedged condition")
+            return None
+
+    lookup = category[7:] if category.startswith("assert_") else category
+    meta_path = _find_metadata_path(metadata_root, lookup)
+    if not meta_path:
+        return None
+    return load_assertion_metadata(meta_path)
+
+# Pair category attempts with matching baseline attempts before metric aggregation;
+def _align_attempts(
+    category: str,
+    category_attempts: List[AttemptInfo],
+    baseline_attempts: List[AttemptInfo],
+) -> Tuple[List[Tuple[AttemptInfo, AttemptInfo]], List[str]]:
+    baseline_map = {attempt.name: attempt for attempt in baseline_attempts}
+    aligned: List[Tuple[AttemptInfo, AttemptInfo]] = []
+
+    for attempt in category_attempts:
+        baseline = baseline_map.get(attempt.name)
+        if baseline is None:
+            LOGGER.warning(
+                "Skipping %s attempt %s: baseline attempt missing",
+                category,
+                attempt.name,
+            )
+            continue
+        if attempt.models != baseline.models:
+            LOGGER.warning(
+                "Skipping %s attempt %s: model set %s does not match baseline %s",
+                category,
+                attempt.name,
+                attempt.models,
+                baseline.models,
+            )
+            continue
+        aligned.append((attempt, baseline))
+
+    aligned.sort(key=lambda pair: pair[0].order)
+
+    while aligned and len(aligned) % 2 == 0:
+        removed = aligned.pop()
+        LOGGER.warning(
+            "Dropping attempt %s for %s to maintain odd attempt count",
+            removed[0].name,
+            category,
+        )
+
+    models = aligned[0][0].models if aligned else []
+    return aligned, models
 
 def _validate_case_sets(assert_cases: Dict[str, EvalCase], no_assert_cases: Dict[str, EvalCase]) -> None:
     assert_ids = set(assert_cases)
@@ -136,69 +327,31 @@ def _write_report(path: Path, bundle: MetricsBundle) -> None:
         f"Cases analysed: {bundle.compliance.considered_cases}/{bundle.compliance.total_cases}",
         "",
         "Compliance",
-        f"  - Transient Compliance Rate (TCR): {bundle.compliance.transient_rate:.3f}",
-        f"  - Persistent Compliance Rate (PCR): {bundle.compliance.persistent_rate:.3f}",
-        f"  - Non-Compliance Rate (NCR): {bundle.compliance.non_compliance_rate:.3f}",
-        f"  - Correction Rate (CR): {bundle.compliance.correction_rate:.3f}",
-        "",
-        "Step Overhead",
-        f"  - Mean Δsteps: {bundle.steps.mean_delta:.2f}",
-        f"  - Median Δsteps: {bundle.steps.median_delta:.2f}",
-        f"  - P90 Δsteps: {bundle.steps.p90_delta:.2f}",
-        "",
-        "Tool Error Delta",
-        f"  - No-assert error rate: {bundle.tool_errors.no_assert_error_rate:.3f}",
-        f"  - Assert error rate: {bundle.tool_errors.assert_error_rate:.3f}",
-        f"  - ΔTE: {bundle.tool_errors.delta_error_rate:.3f}",
+        f"  - Compliance Rate: {bundle.compliance.compliance_rate:.3f}",
+        f"  - Non-Compliance Rate: {bundle.compliance.non_compliance_rate:.3f}",
     ]
-
-    if bundle.tool_errors.top_error_types:
-        lines.append("  - Top error type shifts:")
-        for shift in bundle.tool_errors.top_error_types:
-            lines.append(
-                f"      • {shift.error_type}: assert={shift.assert_count}, "
-                f"no-assert={shift.no_assert_count}, Δ={shift.delta}"
-            )
 
     if bundle.outcome_groups:
         lines.extend(["", "Outcome-Conditioned Metrics"])
         for group in bundle.outcome_groups:
             lines.append(
                 f"  - {group.label} (n={group.count}): "
-                f"TCR={group.compliance.transient_rate:.3f}, "
-                f"PCR={group.compliance.persistent_rate:.3f}, "
-                f"NCR={group.compliance.non_compliance_rate:.3f}, "
-                f"Δsteps_mean={group.steps.mean_delta:.2f}, ΔTE={group.tool_errors.delta_error_rate:.3f}"
+                f"Compliance={group.compliance.compliance_rate:.3f}, "
+                f"Non-compliance={group.compliance.non_compliance_rate:.3f}"
             )
 
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     LOGGER.info("Wrote text report to %s", path)
 
-def _serialise_bundle(
-    bundle,
-    compliance_cases,
-    step_metrics,
-    tool_metrics,
-):
+def _serialise_bundle(bundle: MetricsBundle) -> Dict[str, object]:
     # Shape aggregate metrics for machine consumption; 
     return {
         "compliance": asdict(bundle.compliance),
-        "steps": {
-            "mean_delta": bundle.steps.mean_delta,
-            "median_delta": bundle.steps.median_delta,
-            "p90_delta": bundle.steps.p90_delta,
-        },
-        "tool_errors": {
-            "assert_error_rate": bundle.tool_errors.assert_error_rate,
-            "no_assert_error_rate": bundle.tool_errors.no_assert_error_rate,
-            "delta_error_rate": bundle.tool_errors.delta_error_rate,
-            "top_error_types": [asdict(shift) for shift in bundle.tool_errors.top_error_types],
-        },
         "case_counts": {
-            "persistent": len(bundle.persistent_cases),
-            "transient": len(bundle.transient_cases),
+            "compliant": len(bundle.compliant_cases),
             "non_compliant": len(bundle.non_compliant_cases),
+            "unknown": len(bundle.unknown_cases),
         },
         "outcome_groups": [
             {
@@ -206,29 +359,503 @@ def _serialise_bundle(
                 "label": group.label,
                 "count": group.count,
                 "compliance": asdict(group.compliance),
-                "steps": {
-                    "mean_delta": group.steps.mean_delta,
-                    "median_delta": group.steps.median_delta,
-                    "p90_delta": group.steps.p90_delta,
-                },
-                "tool_errors": {
-                    "assert_error_rate": group.tool_errors.assert_error_rate,
-                    "no_assert_error_rate": group.tool_errors.no_assert_error_rate,
-                    "delta_error_rate": group.tool_errors.delta_error_rate,
-                },
             }
             for group in bundle.outcome_groups
         ],
     }
 
-def _serialise_cases(compliance_cases, step_metrics, tool_metrics, outcomes):
+
+def _serialise_cases(
+    compliance_cases: List[CaseCompliance],
+    outcomes: List[CaseOutcome],
+) -> Dict[str, object]:
     # Flatten per-case diagnostics for offline analysis; 
     return {
         "compliance": [asdict(case) for case in compliance_cases],
-        "steps": [asdict(delta) for delta in step_metrics.per_case],
-        "tool_usage": [asdict(entry) for entry in tool_metrics.per_case],
         "outcomes": [asdict(entry) for entry in outcomes],
     }
+
+# Collapse multiple attempts for a model into a single median metric row;
+def _aggregate_attempts(attempt_results: List[AttemptResult]) -> AggregatedModelMetrics:
+    if not attempt_results:
+        raise ValueError("No attempt results to aggregate")
+
+    attempts = [result.attempt for result in attempt_results]
+
+    def _median(values: List[float]) -> float:
+        return statistics.median(values) if values else 0.0
+
+    compliance_values = [res.metrics.compliance_rate for res in attempt_results]
+    non_compliance_values = [res.metrics.non_compliance_rate for res in attempt_results]
+    considered_values = [res.metrics.considered_cases for res in attempt_results]
+    total_values = [res.metrics.total_cases for res in attempt_results]
+
+    median_compliance = _median(compliance_values)
+    median_index = compliance_values.index(median_compliance)
+
+    aggregated = AggregatedModelMetrics(
+        compliance_rate=median_compliance,
+        non_compliance_rate=_median(non_compliance_values),
+        considered_cases=_median(considered_values),
+        total_cases=_median(total_values),
+        attempts=attempts,
+        attempt_metrics=[(result.attempt, result.metrics) for result in attempt_results],
+        median_attempt=attempt_results[median_index],
+    )
+
+    return aggregated
+
+# Aggregate attempts for a condition into median metrics;
+def _collect_category_metrics(
+    category_dir: Path,
+    metadata_map: Dict[str, AssertionInfo],
+    baseline_attempts: List[AttemptInfo],
+    store_details: bool,
+    excluded_ids: Optional[set[str]] = None,
+    compliance_mode: str = "u-sa",
+) -> Dict[str, AggregatedModelMetrics]:
+    category = category_dir.name
+    category_attempts = _discover_attempts(category_dir)
+    if not category_attempts:
+        LOGGER.warning("No attempts discovered for %s", category)
+        return {}
+    aligned, models = _align_attempts(category, category_attempts, baseline_attempts)
+    if not aligned:
+        LOGGER.warning("No aligned attempts available for %s", category)
+        return {}
+    results: Dict[str, AggregatedModelMetrics] = {}
+
+    for model in models:
+        attempt_results: List[AttemptResult] = []
+        for cat_attempt, baseline_attempt in aligned:
+            assert_dir = cat_attempt.path / model
+            baseline_dir = baseline_attempt.path / model
+            if not assert_dir.exists() or not baseline_dir.exists():
+                LOGGER.warning(
+                    "Skipping %s attempt %s model %s due to missing directories",
+                    category,
+                    cat_attempt.name,
+                    model,
+                )
+                continue
+            attempt_result = _evaluate_attempt(
+                attempt_name=cat_attempt.name,
+                model=model,
+                assert_dir=assert_dir,
+                no_assert_dir=baseline_dir,
+                metadata_map=metadata_map,
+                store_details=store_details,
+                compliance_mode=compliance_mode,
+            )
+            if attempt_result is None:
+                continue
+            attempt_results.append(attempt_result)
+
+        if not attempt_results:
+            LOGGER.warning("No attempt metrics collected for %s/%s", category, model)
+            continue
+
+        if len(attempt_results) % 2 == 0:
+            removed = attempt_results.pop()
+            LOGGER.warning(
+                "Dropping attempt %s for %s/%s after filtering to maintain odd attempt count",
+                removed.attempt,
+                category,
+                model,
+            )
+            if not attempt_results:
+                continue
+
+        try:
+            aggregated = _aggregate_attempts(attempt_results)
+        except ValueError as exc:
+            LOGGER.warning("Skipping aggregation for %s/%s: %s", category, model, exc)
+            continue
+
+        results[model] = aggregated
+
+    return results
+
+def _scalar_metrics_to_dict(metrics: ScalarMetrics) -> Dict[str, float]:
+    return {
+        "compliance_rate": metrics.compliance_rate,
+        "non_compliance_rate": metrics.non_compliance_rate,
+        "considered_cases": metrics.considered_cases,
+        "total_cases": metrics.total_cases,
+    }
+def _aggregated_metrics_to_dict(metrics: AggregatedModelMetrics) -> Dict[str, object]:
+    return {
+        "compliance_rate": metrics.compliance_rate,
+        "non_compliance_rate": metrics.non_compliance_rate,
+        "considered_cases": int(round(metrics.considered_cases)),
+        "total_cases": int(round(metrics.total_cases)),
+        "attempts": metrics.attempts,
+        "attempt_metrics": [
+            {"attempt": attempt, **_scalar_metrics_to_dict(scalar)}
+            for attempt, scalar in metrics.attempt_metrics
+        ],
+    }
+
+def _write_detail_outputs(
+    output_root: Path,
+    category: str,
+    model: str,
+    aggregated: AggregatedModelMetrics,
+    write_files: bool,
+    save_plots: bool,
+) -> None:
+    if not (write_files or save_plots):
+        return
+    detail_dir = output_root / category / model
+    detail_dir.mkdir(parents=True, exist_ok=True)
+    if write_files:
+        aggregated_payload = _aggregated_metrics_to_dict(aggregated)
+        _write_json(detail_dir / AGGREGATED_MODEL_FILENAME, aggregated_payload)
+
+    median_attempt = aggregated.median_attempt
+    if (
+        median_attempt is None
+        or median_attempt.bundle is None
+        or median_attempt.compliance_cases is None
+    ):
+        LOGGER.warning(
+            "Skipping median detail outputs for %s/%s; detailed artefacts unavailable",
+            category,
+            model,
+        )
+        return
+
+    if write_files:
+        summary_payload = _serialise_bundle(median_attempt.bundle)
+        cases_payload = _serialise_cases(
+            median_attempt.compliance_cases,
+            median_attempt.outcome_cases or [],
+        )
+        _write_json(detail_dir / DETAIL_SUMMARY_FILENAME, summary_payload)
+        _write_json(detail_dir / DETAIL_CASES_FILENAME, cases_payload)
+        _write_report(detail_dir / DETAIL_REPORT_FILENAME, median_attempt.bundle)
+
+    if save_plots:
+        plots_dir = detail_dir / PLOTS_SUBDIR
+        plot_compliance(median_attempt.bundle.compliance, plots_dir)
+
+# Emit consolidated CSV view for easy spreadsheet analysis;
+def _write_summary_csv(
+    output_path: Path,
+    table: Dict[str, Dict[str, AggregatedModelMetrics]],
+    mode: str,
+) -> None:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fieldnames = [
+        "condition",
+        "model",
+        "compliance_rate",
+        "non_compliance_rate",
+        "considered_cases",
+        "total_cases",
+        "attempts_used",
+    ]
+
+    with output_path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(fieldnames)
+        for condition in sorted(table.keys()):
+            for model in sorted(table[condition].keys()):
+                metrics = table[condition][model]
+                row = [
+                    condition,
+                    model,
+                    f"{metrics.compliance_rate * 100:.2f}",
+                    f"{metrics.non_compliance_rate * 100:.2f}",
+                    int(round(metrics.considered_cases)),
+                    int(round(metrics.total_cases)),
+                    ";".join(metrics.attempts),
+                ]
+                writer.writerow(row)
+
+    LOGGER.info("Wrote summary CSV to %s", output_path)
+
+
+# Persist the aggregate table as structured JSON for downstream tooling;
+def _write_summary_json(
+    output_path: Path,
+    table: Dict[str, Dict[str, AggregatedModelMetrics]],
+    mode: str,
+) -> None:
+    payload: Dict[str, Dict[str, object]] = {"conditions": {}}
+    for condition, models in table.items():
+        condition_entry: Dict[str, object] = {"models": {}}
+        for model, metrics in models.items():
+            entry = {
+                "compliance_rate": metrics.compliance_rate,
+                "non_compliance_rate": metrics.non_compliance_rate,
+                "considered_cases": int(round(metrics.considered_cases)),
+                "total_cases": int(round(metrics.total_cases)),
+                "attempts": metrics.attempts,
+            }
+            condition_entry["models"][model] = entry
+        payload["conditions"][condition] = condition_entry
+
+    _write_json(output_path, payload)
+
+
+_CR_METRIC_ORDER = [
+    ("overall", "CR"),
+    ("success_to_success", "CR (success→success)"),
+    ("success_to_failure", "CR (success→failure)"),
+    ("failure_to_success", "CR (failure→success)"),
+    ("failure_to_failure", "CR (failure→failure)"),
+]
+
+
+def _format_condition_label(condition: str) -> str:
+    suffix = ""
+    label = condition
+    if condition.endswith("-usa"):
+        suffix = " (U-SA)"
+        label = condition[:-4]
+    elif condition.endswith("-fsa"):
+        suffix = " (F-SA)"
+        label = condition[:-4]
+    if label.startswith("assert_"):
+        label = label[7:]
+    return label + suffix
+
+
+def _extract_compliance_rates(
+    aggregated: AggregatedModelMetrics,
+) -> Dict[str, Tuple[Optional[float], Optional[int]]]:
+    rates: Dict[str, Tuple[Optional[float], Optional[int]]] = {
+        "overall": (
+            aggregated.compliance_rate,
+            int(round(aggregated.considered_cases)),
+        )
+    }
+
+    median_attempt = aggregated.median_attempt
+    outcome_map: Dict[str, Tuple[float, int]] = {}
+    if median_attempt and median_attempt.outcome_groups:
+        for group in median_attempt.outcome_groups:
+            outcome_map[group.category] = (
+                group.compliance.compliance_rate,
+                group.count,
+            )
+
+    for category, _ in _CR_METRIC_ORDER[1:]:
+        rates[category] = outcome_map.get(category, (None, None))
+
+    return rates
+
+
+def _write_cr_summary_csv(
+    output_path: Path,
+    table: Dict[str, Dict[str, AggregatedModelMetrics]],
+    mode: str = "u-sa",
+) -> None:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    conditions = sorted(table.keys())
+    models = sorted({model for models in table.values() for model in models.keys()})
+
+    with output_path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.writer(handle)
+
+        if mode == "u-sa":
+            header = ["model", "condition"]
+            header.extend(label for _, label in _CR_METRIC_ORDER)
+            writer.writerow(header)
+
+            for model in models:
+                for condition in conditions:
+                    aggregated = table.get(condition, {}).get(model)
+                    if not aggregated:
+                        continue
+                    rates = _extract_compliance_rates(aggregated)
+                    row = [model, _format_condition_label(condition)]
+                    for key, _label in _CR_METRIC_ORDER:
+                        value, count = rates.get(key, (None, None))
+                        row.append(
+                            f"{value * 100:.1f}% (n={count})"
+                            if value is not None and count is not None
+                            else ""
+                        )
+                    writer.writerow(row)
+
+        elif mode == "f-sa":
+            header_top = ["model"]
+            for condition in conditions:
+                label = _format_condition_label(condition)
+                header_top.extend([label] * len(_CR_METRIC_ORDER))
+            header_second = ["model"]
+            for _ in conditions:
+                header_second.extend(label for _, label in _CR_METRIC_ORDER)
+            writer.writerow(header_top)
+            writer.writerow(header_second)
+
+            for model in models:
+                row: List[str] = [model]
+                for condition in conditions:
+                    aggregated = table.get(condition, {}).get(model)
+                    if not aggregated:
+                        row.extend([""] * len(_CR_METRIC_ORDER))
+                        continue
+                    rates = _extract_compliance_rates(aggregated)
+                    for key, _label in _CR_METRIC_ORDER:
+                        value, count = rates.get(key, (None, None))
+                        row.append(
+                            f"{value * 100:.1f}% (n={count})"
+                            if value is not None and count is not None
+                            else ""
+                        )
+                writer.writerow(row)
+
+        else:  # interaction mode
+            header = ["model", "condition"]
+            header.extend(label for _, label in _CR_METRIC_ORDER)
+            writer.writerow(header)
+
+            for model in models:
+                for condition in conditions:
+                    aggregated = table.get(condition, {}).get(model)
+                    if not aggregated:
+                        continue
+                    rates = _extract_compliance_rates(aggregated)
+                    row = [model, _format_condition_label(condition)]
+                    for key, _label in _CR_METRIC_ORDER:
+                        value, count = rates.get(key, (None, None))
+                        row.append(
+                            f"{value * 100:.1f}% (n={count})"
+                            if value is not None and count is not None
+                            else ""
+                        )
+                    writer.writerow(row)
+
+    LOGGER.info("Wrote compliance-rate summary CSV to %s", output_path)
+
+
+def _write_cr_summary_json(
+    output_path: Path,
+    table: Dict[str, Dict[str, AggregatedModelMetrics]],
+    mode: str = "u-sa",
+) -> None:
+    conditions = sorted(table.keys())
+    models = sorted({model for models in table.values() for model in models.keys()})
+
+    payload: Dict[str, Dict[str, Dict[str, Optional[float]]]] = {"models": {}}
+
+    for model in models:
+        model_entry: Dict[str, Dict[str, Optional[float]]] = {}
+        for condition in conditions:
+            aggregated = table.get(condition, {}).get(model)
+            if not aggregated:
+                continue
+            rates = _extract_compliance_rates(aggregated)
+            condition_entry: Dict[str, Optional[float]] = {}
+            for key, label in _CR_METRIC_ORDER:
+                value, count = rates.get(key, (None, None))
+                if value is None or count is None:
+                    condition_entry[label] = None
+                else:
+                    condition_entry[label] = {
+                        "percent": round(value * 100, 1),
+                        "count": count,
+                    }
+            model_entry[_format_condition_label(condition)] = condition_entry
+        payload["models"][model] = model_entry
+
+    _write_json(output_path, payload)
+
+# Run the full metric pipeline for a single attempt/model pairing;
+def _evaluate_attempt(
+    attempt_name: str,
+    model: str,
+    assert_dir: Path,
+    no_assert_dir: Path,
+    metadata_map: Dict[str, AssertionInfo],
+    store_details: bool,
+    compliance_mode: str = "u-sa",
+) -> Optional[AttemptResult]:
+    label = f"{attempt_name}-{model}"
+    try:
+        assert_result_path, assert_score_path = _resolve_run_files(
+            result_arg=None,
+            score_arg=None,
+            dir_arg=str(assert_dir),
+            label=f"assert {label}",
+        )
+    except SystemExit as exc:
+        LOGGER.warning("Skipping %s: %s", label, exc)
+        return None
+
+    try:
+        no_result_path, no_score_path = _resolve_run_files(
+            result_arg=None,
+            score_arg=None,
+            dir_arg=str(no_assert_dir),
+            label=f"no-assert {label}",
+        )
+    except SystemExit as exc:
+        LOGGER.warning("Skipping %s baseline: %s", label, exc)
+        return None
+
+    assert_cases = parse_eval_file(assert_result_path, excluded_ids=SPECIAL_CASE_IDS)
+    no_assert_cases = parse_eval_file(no_result_path, excluded_ids=SPECIAL_CASE_IDS)
+    assert_scores = load_score_file(assert_score_path)
+    no_assert_scores = load_score_file(no_score_path)
+
+    _validate_case_sets(assert_cases, no_assert_cases)
+    _validate_score_sets(assert_scores, no_assert_scores, assert_cases)
+
+    if compliance_mode == "f-sa":
+        compliance_cases, compliance_agg = compute_followup_compliance_metrics(
+            assert_cases,
+            metadata_map,
+            excluded_ids=SPECIAL_CASE_IDS,
+        )
+    else:
+        compliance_cases, compliance_agg = compute_compliance_metrics(
+            assert_cases,
+            metadata_map,
+            excluded_ids=SPECIAL_CASE_IDS,
+        )
+    outcome_groups, outcome_cases_full = _compute_outcome_groups(
+        assert_cases,
+        no_assert_cases,
+        assert_scores,
+        no_assert_scores,
+        metadata_map,
+        compliance_mode=compliance_mode,
+    )
+
+    bundle: Optional[MetricsBundle] = None
+    outcome_cases: Optional[List[CaseOutcome]] = None
+
+    if store_details:
+        bundle = bundle_metrics(
+            compliance_cases,
+            compliance_agg,
+            outcome_groups,
+        )
+        outcome_cases = outcome_cases_full
+
+    metrics = ScalarMetrics(
+        compliance_rate=compliance_agg.compliance_rate,
+        non_compliance_rate=compliance_agg.non_compliance_rate,
+        considered_cases=compliance_agg.considered_cases,
+        total_cases=compliance_agg.total_cases,
+    )
+
+    result = AttemptResult(
+        attempt=attempt_name,
+        model=model,
+        metrics=metrics,
+        bundle=bundle,
+        compliance_cases=compliance_cases if store_details else None,
+        outcome_groups=outcome_groups,
+        outcome_cases=outcome_cases,
+        mode=compliance_mode,
+    )
+
+    return result
 
 def _compute_outcome_groups(
     assert_cases: Dict[str, EvalCase],
@@ -236,6 +863,7 @@ def _compute_outcome_groups(
     assert_scores: Dict[str, ScoreCase],
     no_assert_scores: Dict[str, ScoreCase],
     metadata: Dict[str, AssertionInfo],
+    compliance_mode: str = "u-sa",
 ) -> Tuple[List[OutcomeGroupMetrics], List[CaseOutcome]]:
     # Partition cases by outcome shifts and recompute metrics per bucket; 
     category_to_ids: Dict[str, List[str]] = defaultdict(list)
@@ -271,12 +899,18 @@ def _compute_outcome_groups(
             continue
         group_label = next(lbl for (cat, lbl) in OUTCOME_DEFINITIONS.values() if cat == key)
         subset_assert = {cid: assert_cases[cid] for cid in ids}
-        subset_no = {cid: no_assert_cases[cid] for cid in ids}
         subset_metadata = {cid: metadata[cid] for cid in ids if cid in metadata}
 
-        compliance_subset, compliance_agg_subset = compute_compliance_metrics(subset_assert, subset_metadata)
-        steps_subset = compute_step_metrics(subset_assert, subset_no)
-        tool_subset = compute_tool_error_metrics(subset_assert, subset_no)
+        if compliance_mode == "f-sa":
+            _, compliance_agg_subset = compute_followup_compliance_metrics(
+                subset_assert,
+                subset_metadata,
+            )
+        else:
+            _, compliance_agg_subset = compute_compliance_metrics(
+                subset_assert,
+                subset_metadata,
+            )
 
         outcome_groups.append(
             OutcomeGroupMetrics(
@@ -284,8 +918,6 @@ def _compute_outcome_groups(
                 label=group_label,
                 count=len(ids),
                 compliance=compliance_agg_subset,
-                steps=steps_subset,
-                tool_errors=tool_subset,
             )
         )
 
@@ -293,119 +925,190 @@ def _compute_outcome_groups(
     return outcome_groups, case_outcomes
 
 def main() -> None:
-    # CLI entrypoint for assertion effect comparison; 
-    parser = argparse.ArgumentParser(description="Compare assert vs no-assert evaluation results")
-    parser.add_argument(
-        "--no-assert-dir",
-        required=True,
-        help="Directory containing exactly one *_result.json and one *_score.json for the no-assert run",
+    parser = argparse.ArgumentParser(
+        description="Aggregate non-accuracy metrics across assertion conditions"
     )
     parser.add_argument(
-        "--assert-dir",
-        required=True,
-        help="Directory containing exactly one *_result.json and one *_score.json for the assert run",
+        "--results-root",
+        type=Path,
+        default=DEFAULT_RESULTS_ROOT,
+        help="Root directory containing per-condition results (default: data/results)",
     )
     parser.add_argument(
-        "--assert-metadata",
-        required=True,
-        help="Path to assertion metadata JSON/JSONL used to identify target functions",
+        "--metadata-root",
+        type=Path,
+        default=DEFAULT_METADATA_ROOT,
+        help="Root directory containing assertion metadata files (default: data/assertions)",
     )
-    parser.add_argument("--summary-json", default="eval/output/assertion_metrics_summary.json")
-    parser.add_argument("--case-json", default="eval/output/assertion_metrics_cases.json")
-    parser.add_argument("--report", default="eval/output/assertion_metrics.txt")
-    parser.add_argument("--plots", action="store_true", help="Generate plots in eval/plots/ or custom directory")
     parser.add_argument(
-        "--focal-turn",
-        choices=("none", "first", "last"),
-        default="none",
-        help="Restrict analysis to the first turn, last turn, or the entire run (none)",
+        "--output-dir",
+        type=Path,
+        default=DEFAULT_OUTPUT_DIR,
+        help="Directory where aggregated outputs will be written (default: eval/output/non_accuracy)",
     )
-    parser.add_argument("--plots-dir", default="eval/plots")
+    parser.add_argument(
+        "--summary-csv",
+        type=Path,
+        default=None,
+        help="Optional override for the summary CSV output path",
+    )
+    parser.add_argument(
+        "--summary-json",
+        type=Path,
+        default=None,
+        help="Optional override for the summary JSON output path",
+    )
+    parser.add_argument(
+        "--emit-details",
+        action="store_true",
+        help="Write median-attempt reports, JSON artefacts, and per-model directories",
+    )
+    parser.add_argument(
+        "--plots",
+        action="store_true",
+        help="Generate plots for the median attempt of each model/condition",
+    )
+    parser.add_argument(
+        "--mode",
+        choices=sorted(MODES),
+        default="u-sa",
+        help="Evaluation mode: u-sa (default), f-sa, or inter",
+    )
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args()
 
     _configure_logging(args.verbose)
 
-    no_assert_path, no_assert_score_path = _resolve_run_files(
-        result_arg=None,
-        score_arg=None,
-        dir_arg=args.no_assert_dir,
-        label="no-assert",
-    )
-    assert_path, assert_score_path = _resolve_run_files(
-        result_arg=None,
-        score_arg=None,
-        dir_arg=args.assert_dir,
-        label="assert",
-    )
-    metadata_path = Path(args.assert_metadata)
+    results_root: Path = args.results_root
+    metadata_root: Path = args.metadata_root
+    output_dir: Path = args.output_dir
+    mode: str = args.mode
 
-    LOGGER.info("Loading runs...")
-    no_assert_cases = parse_eval_file(no_assert_path, focal_turn=args.focal_turn)
-    assert_cases = parse_eval_file(assert_path, focal_turn=args.focal_turn)
-    no_assert_scores = load_score_file(no_assert_score_path)
-    assert_scores = load_score_file(assert_score_path)
-    metadata = load_assertion_metadata(metadata_path)
+    if not results_root.exists():
+        raise SystemExit(f"Results root not found: {results_root}")
+    if not metadata_root.exists():
+        raise SystemExit(f"Metadata root not found: {metadata_root}")
 
-    LOGGER.info(
-        "Loaded %d assert cases and %d no-assert cases", len(assert_cases), len(no_assert_cases)
-    )
+    baseline_dir = results_root / "noassert"
+    if not baseline_dir.exists():
+        raise SystemExit("Baseline no-assert results directory not found")
 
-    _validate_case_sets(assert_cases, no_assert_cases)
-    _validate_score_sets(assert_scores, no_assert_scores, assert_cases)
+    baseline_attempts = _discover_attempts(baseline_dir)
+    if not baseline_attempts:
+        raise SystemExit("No attempts discovered under the no-assert condition")
 
-    LOGGER.info("Computing metrics...")
-    compliance_cases, compliance_agg = compute_compliance_metrics(assert_cases, metadata)
-    step_metrics = compute_step_metrics(assert_cases, no_assert_cases)
-    tool_metrics = compute_tool_error_metrics(assert_cases, no_assert_cases)
-    outcome_groups, outcome_per_case = _compute_outcome_groups(
-        assert_cases,
-        no_assert_cases,
-        assert_scores,
-        no_assert_scores,
-        metadata,
-    )
-    bundle = bundle_metrics(
-        compliance_cases,
-        compliance_agg,
-        step_metrics,
-        tool_metrics,
-        outcome_groups,
-    )
+    output_dir.mkdir(parents=True, exist_ok=True)
+    summary_csv_path = args.summary_csv or (output_dir / SUMMARY_CSV_NAME)
+    summary_json_path = args.summary_json or (output_dir / SUMMARY_JSON_NAME)
 
-    summary_payload = _serialise_bundle(bundle, compliance_cases, step_metrics, tool_metrics)
-    cases_payload = _serialise_cases(compliance_cases, step_metrics, tool_metrics, outcome_per_case)
+    store_details = args.emit_details or args.plots
 
-    _write_json(Path(args.summary_json), summary_payload)
-    _write_json(Path(args.case_json), cases_payload)
-    _write_report(Path(args.report), bundle)
+    aggregated_table: Dict[str, Dict[str, AggregatedModelMetrics]] = {}
 
-    LOGGER.info(
-        "TCR=%.3f, PCR=%.3f, NCR=%.3f, CR=%.3f",
-        bundle.compliance.transient_rate,
-        bundle.compliance.persistent_rate,
-        bundle.compliance.non_compliance_rate,
-        bundle.compliance.correction_rate,
-    )
-    LOGGER.info(
-        "Δsteps mean=%.2f median=%.2f p90=%.2f",
-        bundle.steps.mean_delta,
-        bundle.steps.median_delta,
-        bundle.steps.p90_delta,
-    )
-    LOGGER.info(
-        "ΔTE=%.3f (assert=%.3f, no-assert=%.3f)",
-        bundle.tool_errors.delta_error_rate,
-        bundle.tool_errors.assert_error_rate,
-        bundle.tool_errors.no_assert_error_rate,
-    )
+    for category_dir in sorted(results_root.iterdir(), key=lambda path: path.name):
+        if not category_dir.is_dir():
+            continue
+        category = category_dir.name
+        if category == "noassert":
+            continue
 
-    if args.plots:
-        plots_dir = Path(args.plots_dir)
-        plot_compliance(bundle.compliance, plots_dir)
-        plot_step_ecdf(bundle.steps, plots_dir)
-        plot_error_rates(bundle.tool_errors, plots_dir)
-        LOGGER.info("Plots written to %s", plots_dir)
+        if mode == "u-sa" and category.startswith("assert_f-sa"):
+            continue
+        if mode == "f-sa" and (not category.startswith("assert_f-sa") or "interaction" in category):
+            continue
+        if mode == "inter" and not category.startswith("assert_f-sa-interaction"):
+            continue
+        if mode == "inter":
+            usa_metadata = _load_metadata(metadata_root, category, mode="inter")
+            fsa_metadata = _load_metadata(metadata_root, category, mode="f-sa")
+            if not usa_metadata and not fsa_metadata:
+                continue
 
-if __name__ == "__main__":  # pragma: no cover
+            if usa_metadata:
+                label = f"{category}-usa"
+                category_metrics = _collect_category_metrics(
+                    category_dir,
+                    usa_metadata,
+                    baseline_attempts,
+                    store_details=store_details,
+                    excluded_ids=SPECIAL_CASE_IDS,
+                    compliance_mode="u-sa",
+                )
+                if category_metrics:
+                    aggregated_table[label] = category_metrics
+                    if args.emit_details or args.plots:
+                        for model, metrics in category_metrics.items():
+                            _write_detail_outputs(
+                                output_root=output_dir,
+                                category=label,
+                                model=model,
+                                aggregated=metrics,
+                                write_files=args.emit_details,
+                                save_plots=args.plots,
+                            )
+
+            if fsa_metadata:
+                label = f"{category}-fsa"
+                category_metrics = _collect_category_metrics(
+                    category_dir,
+                    fsa_metadata,
+                    baseline_attempts,
+                    store_details=store_details,
+                    excluded_ids=SPECIAL_CASE_IDS,
+                    compliance_mode="f-sa",
+                )
+                if category_metrics:
+                    aggregated_table[label] = category_metrics
+                    if args.emit_details or args.plots:
+                        for model, metrics in category_metrics.items():
+                            _write_detail_outputs(
+                                output_root=output_dir,
+                                category=label,
+                                model=model,
+                                aggregated=metrics,
+                                write_files=args.emit_details,
+                                save_plots=args.plots,
+                            )
+            continue
+
+        metadata_map = _load_metadata(metadata_root, category, mode)
+        if not metadata_map:
+            continue
+
+        compliance_mode = "f-sa" if mode == "f-sa" else "u-sa"
+        category_metrics = _collect_category_metrics(
+            category_dir,
+            metadata_map,
+            baseline_attempts,
+            store_details=store_details,
+            excluded_ids=SPECIAL_CASE_IDS,
+            compliance_mode=compliance_mode,
+        )
+
+        if not category_metrics:
+            continue
+
+        aggregated_table[category] = category_metrics
+
+        if args.emit_details or args.plots:
+            for model, metrics in category_metrics.items():
+                _write_detail_outputs(
+                    output_root=output_dir,
+                    category=category,
+                    model=model,
+                    aggregated=metrics,
+                    write_files=args.emit_details,
+                    save_plots=args.plots,
+                )
+
+    if not aggregated_table:
+        raise SystemExit("No non-accuracy metrics could be aggregated; check inputs")
+    _write_summary_csv(summary_csv_path, aggregated_table, mode)
+    _write_summary_json(summary_json_path, aggregated_table, mode)
+    cr_csv_path = output_dir / "cr_summary.csv"
+    cr_json_path = output_dir / "cr_summary.json"
+    _write_cr_summary_csv(cr_csv_path, aggregated_table, mode)
+    _write_cr_summary_json(cr_json_path, aggregated_table, mode)
+
+if __name__ == "__main__":
     main()
